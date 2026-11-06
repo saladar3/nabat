@@ -1,0 +1,30 @@
+# Сборка игры приходит в zagruzka/ частями (part.00, part.01, …) вместе с manifest.txt:
+#   target <папка на сайте>   parts <сколько частей>   sha256 <контрольная сумма архива>
+# Когда пришли все части и сумма сошлась, архив распаковывается в папку на сайте, zagruzka/ очищается.
+name: Распаковать сборку
+on:
+  push:
+    branches: [main]
+    paths: ['zagruzka/**', '.github/workflows/raspakovat.yml', '.github/raspakovat.sh']
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: raspakovka
+  cancel-in-progress: false
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Проверить части и распаковать
+        id: unpack
+        run: bash .github/raspakovat.sh
+      - name: Пересобрать сайт
+        if: steps.unpack.outputs.done == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
