@@ -4189,7 +4189,10 @@ function rtImpact(B, a, t, d, mul) {
   const heavy = down || ma >= 2.5 || (mul || 1) >= 1.5;
   if ((a.hero || t.hero || heavy) && R.t - (R.hsT || -9) > 0.22) { R.hs = Math.max(R.hs || 0, down ? 0.075 : heavy ? 0.06 : 0.04); R.hsT = R.t; }
   if (heavy) R.shk = Math.min(1.2, (R.shk || 0) + (down ? 0.3 : 0.18) * Math.min(1.5, ma / 3 + 0.3));
-  if (down || ma >= 2.5) { R.bev = R.bev || []; R.bev.push({ e: 'impact', x: t.px, y: t.py, t: R.t, k: down ? 2 : 1 }); }
+  R.bev = R.bev || [];
+  if (down || ma >= 2.5) R.bev.push({ e: 'impact', x: t.px, y: t.py, t: R.t, k: down ? 2 : 1 });      // тяжёлый удар или сбитие с ног: пыль из-под ног
+  else if (ma >= 1.2 && R.t - (R.dtT || 0) > 0.11) { R.dtT = R.t; R.bev.push({ e: 'impact', x: t.px, y: t.py, t: R.t, k: 0 }); }      // обычный ощутимый удар — мелкая пыль, с дросселем (Kimi 030, п. 5)
+  if (R.bev.length > 40) R.bev.splice(0, R.bev.length - 40);      // кап, как в 1a_beast.js
   if (ma >= 3 && !(t.hp > 0 && t.hero) && rtR(B) < 0.35) { R.dec = R.dec || []; R.dec.push({ k: 'crater', x: t.px, y: t.py + 4, r: 10 + 3 * Math.min(6, ma), t: R.t }); }      // тяжёлый удар оставляет вмятину
 }
 function rtSwingTick(B, u) {                                 // true — боец занят ударом (стоит, доигрывает)
@@ -4249,6 +4252,7 @@ function rtHurt(B, t, d, a, o) {
   t.hp = 0; if (a) a.kills++; t.killer = a ? a.id : 0; t.an = 'die'; t.at = 0;
   if (t.side === 0 && typeof necroOwnCorpse === 'function') necroOwnCorpse(B, t);
   if (t.side === 1) {
+    B.rt.bev = B.rt.bev || []; B.rt.bev.push({ e: 'poof', x: t.px, y: t.py, t: B.rt.t }); if (B.rt.bev.length > 40) B.rt.bev.shift();      // тело падает — клуб пыли у ног (Kimi 030, п. 5)
     const M = btM(t);
     if (t.k === 'lich' && B.rt.phyl && B.rt.phyl.hp > 0) { t.hp = 1; t.reform = 5; rtFx(B, { k: 'txt', x: t.px, y: t.py - 40, s: 'reform' }); rtMsg(B, 'lichReform'); return; }
     if (t.k === 'troll' && !(t.burnT > B.rt.t) && !t.rose) { t.hp = 1; t.reform = 3.5; t.rose = 1; rtFx(B, { k: 'txt', x: t.px, y: t.py - 40, s: 'trollUp' }); rtMsg(B, 'trollUp'); return; }
@@ -4342,6 +4346,7 @@ function rtTeleHit(B, T0) {
 }
 function rtParry(B, u, a) {                                  // точно отпустил стойку — удар отбит, ответ втрое
   u.s.parry = 0; delete u.s.parry; u.standUp = 0; rtFx(B, { k: 'parry', x: u.px, y: u.py - 20, dur: 0.6 }); rtMsg(B, 'parry');
+  B.rt.bev = B.rt.bev || []; B.rt.bev.push({ e: 'spark', x: u.px, y: u.py - 14, t: B.rt.t }); if (B.rt.bev.length > 40) B.rt.bev.shift();      // отбитый удар — золотые искры (Kimi 030, п. 5)
   if (a && a.hp > 0) { rtHurt(B, a, Math.round(u.d * 3 * (typeof heroArtMul === 'function' ? heroArtMul(B, u, a, {}) : 1)), u, {}); a.s.stun = 1.4; }
   B.parries = (B.parries || 0) + 1;
 }
@@ -8133,7 +8138,8 @@ function rtGround(g, B, R, pal, key) {
     g.fillStyle = dirt; g.beginPath(); g.ellipse(x, y, 18 + rnd() * 16, 8 + rnd() * 7, 0, 0, 6.3); g.fill(); }
   for (let i = 0; i < 7; i++) { const a = rnd() * 6.3, d = 32 + rnd() * 48; g.fillStyle = dirt2; g.beginPath(); g.ellipse(mx + Math.cos(a) * d, my + 22 + Math.sin(a) * d * 0.4, 13 + rnd() * 13, 5 + rnd() * 5, 0, 0, 6.3); g.fill(); }
   if (!TS.ready || typeof tsBlitG !== 'function') return;
-  const deco = win ? ['stump1', 'stump3'] : ['deco06', 'deco07', 'deco08', 'deco09', 'deco10', 'bush2', 'bush4', 'stump3'];
+  const deco = win ? ['stump1', 'stump3', 'stump4'] :      /* камней нет: декор не путать с камнями-препятствиями */
+    ['deco01', 'deco02', 'deco07', 'deco08', 'deco09', 'deco10', 'deco11', 'bush2', 'bush4', 'stump3'];
   for (let i = 0, placed = 0; i < 60 && placed < 12; i++) { const x = 16 + rnd() * (RTW - 32), y = 40 + rnd() * (RTH - 56), k = deco[(rnd() * deco.length) | 0], sc = 0.5 + rnd() * 0.25;
     if (!TSD[k] || inZone(x, y, 14) || inOb(x, y, 26) || Math.hypot(x - mx, y - my) < 84) continue;
     g.save(); g.globalAlpha = 0.9; tsBlitG(g, k, 0, x, y, sc, (x | 0) % 2 === 1); g.restore(); placed++; }
@@ -8160,6 +8166,16 @@ function rtBgBuild(B) {
   // вход в логово: верх поля
   const lk = B.lk || '', mx = RTC * R.sx * 4.5, my = RTC * R.sy * 1.0;
   if (TS.ready) { const k = /gob|band|hob|chief/.test(lk) ? 'o_gob_house' : /keep|host|siege/.test(lk) ? 'o_castle_destroyed' : 'o_mine'; const D = TSD[k], s = (k === 'o_castle_destroyed' ? 0.42 : 0.55) * (D.k || 1); g.drawImage(tsCanvas(k), 0, 0, D.w, D.h, mx - D.ax * s, my - D.by * s + 18, D.w * s, D.h * s); }
+  // обстановка у входа по типу врага (Kimi 030, п. 8): только ключи вне TS_DROP, каждый — с проверкой TSD; камней и фигур нет — их не спутать с препятствиями и врагами
+  if (TS.ready && typeof tsBlitG === 'function') { const put = [];
+    const add = (k, dx, dy, s) => { if (TSD[k]) put.push([k, mx + dx, my + 24 + dy, s]); };
+    if (/gob|band|hob|chief/.test(lk)) { add('res_wood', -58, 26, 0.9); add('gold' + (1 + ((B.lid || 0) % 3)), 52, 30, 0.8); add('tool1', -26, 42, 0.7); if (/band/.test(lk)) { add('stump1', 68, 12, 0.7); add('tool2', 84, 30, 0.75); } }
+    else if (/keep|host|siege/.test(lk)) { add('stump2', -60, 30, 0.7); add('tool3', 58, 34, 0.75); add('res_wood', 30, 48, 0.75); }
+    else if (/barrow|lich/.test(lk)) { add('deco14', -42, 30, 0.9); add('deco14', 44, 36, 0.6); add('stump4', 8, 50, 0.6); }
+    else if (/spider/.test(lk)) { add('bush2', -52, 30, 0.7); add('deco14', 48, 34, 0.8); }
+    else if (/drake|dragon|ancient/.test(lk)) { add('gold' + (4 + ((B.lid || 0) % 3)), -56, 30, 0.55); add('gold3', 52, 40, 0.8); }
+    else { add('tool' + (1 + ((B.lid || 0) % 4)), -46, 34, 0.8); add('stump2', 50, 36, 0.7); add('stump1', 68, 24, 0.6); }
+    for (const it of put) { g.save(); g.globalAlpha = 0.95; tsBlitG(g, it[0], 0, it[1], it[2], it[3], (it[1] | 0) % 2 === 1); g.restore(); } }
   // опушка по краям
   if (TS.ready) { const L = []; for (let x = 10; x < RTW; x += 46) { L.push([x, 4 + (x * 7) % 14]); } for (const p of L) { if (Math.abs(p[0] - mx) < 70) continue; const k = (p[0] * 3) % 2 ? 'tree1' : 'tree3', D = TSD[k], s = 0.28 * (D.k || 1); g.drawImage(pal === 'winter' ? tsRemap(k, 'w', tsWinterFol) : tsCanvas(k), 0, 0, D.w, D.h, p[0] - D.ax * s, p[1] - D.by * s + 30, D.w * s, D.h * s); } }
   g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 0, RTW, 3); g.fillRect(0, RTH - 3, RTW, 3);
@@ -8294,7 +8310,14 @@ function renderRt(t) {
   ctx.fillStyle = '#16261a'; ctx.fillRect(0, 0, W, H);
   const z = RTV.z, bg = rtBgBuild(B); tsSmooth(z); ctx.drawImage(bg, RTV.ox, RTV.oy, RTW * z, RTH * z); ctx.imageSmoothingEnabled = true;
   // огонь и туман на земле, ловушки, тела
-  for (const zn of R.zn) { if (zn.k === 'fire') { const D = TSD.fx_fire_03; for (let i = 0; i < 4; i++) { const x = zn.x + zn.w * (0.25 + (i % 2) * 0.5), y = zn.y + zn.h * (0.3 + (i >> 1) * 0.45); if (TS.ready && D) tsBlit(tsCanvas('fx_fire_03'), D, Math.floor(t * 12 + i * 3), rX(x), rY(y), TSS * z * 1.8, false, 0); else { ctx.fillStyle = '#ff7a1a'; ci(ctx, rX(x), rY(y), 8 * z); } } } }
+  for (const zn of R.zn) { if (zn.k !== 'fire') continue;
+    const D = TSD.fx_fire_03; for (let i = 0; i < 4; i++) { const x = zn.x + zn.w * (0.25 + (i % 2) * 0.5), y = zn.y + zn.h * (0.3 + (i >> 1) * 0.45); if (TS.ready && D) tsBlit(tsCanvas('fx_fire_03'), D, Math.floor(t * 12 + i * 3), rX(x), rY(y), TSS * z * 1.8, false, 0); else { ctx.fillStyle = '#ff7a1a'; ci(ctx, rX(x), rY(y), 8 * z); } }
+    // кострище (Kimi 030, п. 4): днём — тёплый жар на траве из кэшированного glowSpr (ночью ореол даёт rtNight), дым и искры — в существующий кап частиц
+    const fcx = zn.x + zn.w / 2, fcy = zn.y + zn.h / 2, noEmit = typeof CINE !== 'undefined' && CINE.ghost;      // повтор в кино: частицы призрака — из записи, новые не плодим
+    if (!B.night) { if (!glowSpr) mkLight(); const gr = Math.max(zn.w, zn.h) * z * 0.55 * (1 + Math.sin(t * 6.4 + zn.x) * 0.07); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.2; ctx.drawImage(glowSpr, rX(fcx) - gr, rY(fcy) - gr * 0.62, gr * 2, gr * 1.24); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
+    if (!noEmit && typeof bstSmokePuff === 'function' && Math.random() < 0.1) bstSmokePuff(fcx, fcy, 20, 1);
+    if (!noEmit && typeof bstEmit === 'function' && Math.random() < 0.16) bstEmit({ k: 'ember', x: fcx + (Math.random() - 0.5) * 24, y: fcy, h: 12, vx: (Math.random() - 0.5) * 20, vy: -6, vh: 40 + Math.random() * 50, a: 0, life: 0.5 + Math.random() * 0.7, r0: 1.4, r1: 0.7, pal: BST_PAL.red.fire });
+  }
   for (const tp of R.tr) { ctx.strokeStyle = '#c8ced8'; ctx.lineWidth = 2; const X = rX(tp.x), Y = rY(tp.y); ctx.beginPath(); ctx.arc(X, Y, 9 * z, Math.PI, 0); ctx.stroke(); for (let q = -2; q <= 2; q++) { ctx.beginPath(); ctx.moveTo(X + q * 4 * z, Y); ctx.lineTo(X + q * 4 * z, Y - 6 * z); ctx.stroke(); } }
   const hN = rtHeroU(B), nec = hN && hN.hero === 'necro', uzF = nec ? rtUzFree(B) : 0, aimR = nec && typeof RTU !== 'undefined' && RTU.aim === 'raise';
   if (typeof bstDecals === 'function') bstDecals(B, z, t);
@@ -9718,7 +9741,9 @@ function bstEvents(B, z) {
   const R = B.rt, L = R.bev || []; R.bevSeen = R.bevSeen || 0;
   for (const ev of L) { if (ev.t <= R.bevSeen) continue; const u = btU(B, ev.id); const s = u && u.ba ? TSS * z * 1.7 * window.__BEAST[u.k].k : 1;
     if (ev.e === 'fall') { bstDust(ev.x, ev.y, 7, 70, 7); continue; }
-    if (ev.e === 'impact') { bstDust(ev.x, ev.y, ev.k === 2 ? 8 : 4, ev.k === 2 ? 80 : 50, ev.k === 2 ? 7 : 5); continue; }      // удар тяжёлого или сбитый с ног: пыль из-под ног
+    if (ev.e === 'poof') { bstDust(ev.x, ev.y, 5, 52, 5); continue; }      // павший враг: клуб пыли у ног (Kimi 030, п. 5)
+    if (ev.e === 'spark') { for (let i = 0; i < 7; i++) { const a2 = Math.random() * 6.283, v2 = 90 + Math.random() * 130; bstEmit({ k: 'ember', x: ev.x, y: ev.y, h: 16, vx: Math.cos(a2) * v2, vy: Math.sin(a2) * v2 * 0.6, vh: 60 + Math.random() * 90, a: 0, life: 0.3 + Math.random() * 0.35, r0: 1.3, r1: 0.5, pal: ['#fff6c8', '#ffe07a', '#ffd870'] }); } continue; }      // парирование: золотые искры
+    if (ev.e === 'impact') { bstDust(ev.x, ev.y, ev.k === 2 ? 8 : ev.k === 1 ? 4 : 3, ev.k === 2 ? 80 : ev.k === 1 ? 50 : 44, ev.k === 2 ? 7 : ev.k === 1 ? 5 : 4); continue; }      // пыль из-под ног: 2 — сбитие, 1 — тяжёлый, 0 — обычный удар
     if (!u || !u.ba) continue; const fu = window.__BEAST[u.k].fu;
     const kpF = nm => { const p = bstKp(u, nm, rX(u.px), rY(u.py), s); return p ? { x: (p.x - RTV.ox) / z, y: u.py + (p.y - rY(u.py)) / z * 0 } : null; };
     if (ev.e === 'step') { for (const nm of ['paw_fl', 'paw_fr', 'paw_bl', 'paw_br']) { const p = kpF(nm); if (p) bstDust(p.x, u.py + (nm.endsWith('r') ? -10 : 8), 2, 26, 5); } }
@@ -10966,7 +10991,7 @@ mergeStr(STR.ru, {
     boar: ['Вепрь', 'Топчет поля и бросается на всех, кто рядом. Уходит сам часа через три', 'много мяса, шкура, два клыка'],
     gob: ['Гоблин', 'Идёт отрядом, ломает ворота или обходит стену. Бежит, потеряв больше половины бойцов', 'золото, копьё'],
     thief: ['Гоблин-вор', 'Не дерётся: бежит к амбару, хватает и уносит. Убитый вор бросает краденое', 'немного золота'],
-    archer: ['Гоблин-лучник', 'Бьёт с 170 шагов и достаёт дозорных на вышке. Вблизи беспомощен', 'золото, дерево'],
+    archer: ['Гоблин-лучник', 'Бьёт с 170 шагов и достаёт дозорных на вышке. Вблизи бьёт заметно слабее', 'золото, дерево'],
     shaman: ['Шаман гоблинов', 'Прячется за спинами и лечит своих. Пока он жив, гоблины не бегут', 'золото'],
     slaver: ['Ловец', 'Хватает безоружного и уносит. Убейте его до опушки — человек спасён', 'золото'],
     ogre: ['Огр', 'Крушит здания и не замечает безоружных. Приходит с большим отрядом', 'шкуры, золото, дерево'] },
@@ -11015,7 +11040,7 @@ mergeStr(STR.en, {
     boar: ['Boar', 'Tramples fields and charges anyone nearby. Leaves on its own in about three hours', 'lots of meat, hide, two fangs'],
     gob: ['Goblin', 'Comes in a band, breaks the gate or goes around the wall. Flees after losing more than half the fighters', 'gold, spear'],
     thief: ['Goblin thief', 'Does not fight: runs to the barn, grabs and carries off. A slain thief drops the loot', 'a little gold'],
-    archer: ['Goblin archer', 'Shoots from 170 paces and reaches lookouts on towers. Helpless up close', 'gold, wood'],
+    archer: ['Goblin archer', 'Shoots from 170 paces and reaches lookouts on towers. Much weaker up close', 'gold, wood'],
     shaman: ['Goblin shaman', 'Hides behind others and heals them. While he lives goblins do not flee', 'gold'],
     slaver: ['Slaver', 'Grabs an unarmed person and carries them off. Kill him before the forest edge and the person is saved', 'gold'],
     ogre: ['Ogre', 'Smashes buildings and ignores the unarmed. Comes with a large band', 'hides, gold, wood'] },
