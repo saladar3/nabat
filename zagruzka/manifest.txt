@@ -1,0 +1,3 @@
+target pikabu
+parts 4
+sha256 886adef11b0796d8ef490404ea87382929b7dbec35acdb189cb1d4f0f8afa7e9
