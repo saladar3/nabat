@@ -1,3 +1,0 @@
-target pikabu
-parts 4
-sha256 a22575920fd1905d086342e4d2ed7fe2825b4efd96af0d937535d6e9ccb29616

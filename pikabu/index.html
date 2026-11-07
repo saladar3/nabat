@@ -13921,8 +13921,8 @@ function zooBox(md) {
     if (zooDrg(z) && z.st === 1) h += '<span class="lt">' + esc(fill(T('drgL1'), { d: Math.min(DRG_ADULT, G.day - (z.st1 || z.born)), n: DRG_ADULT, x: Math.min(DRG_XP, z.xp || 0), m: DRG_XP })) + '</span>';
     if (ad && z.role === 'farm') h += '<span class="lt">' + esc(T('zooFarmN')[z.k]) + '</span>';
     const tx = el2('div', 'tx', h), row = el2('div', 'row');
-    if (ad) for (const ro of ['trip', 'guard', 'farm']) { const b = btn('mini' + (z.role === ro ? ' on' : ''), esc(T('zooRoleN')[ro]), () => { zooRole(z.id, ro); SND.tap(); saveSoon(); openBest(); }); b.dataset.k = 'zr_' + ro + '_' + z.id; row.appendChild(b); }
-    const fb = btn('mini', esc(T('zooFree')), () => { const r2 = zooFree(z.id); toast(T('zooFreeR')[r2] || r2); SND.tap(); saveSoon(); openBest(); }); fb.dataset.k = 'zf_' + z.id; row.appendChild(fb);
+    if (ad) for (const ro of ['trip', 'guard', 'farm']) { const b = btn('zbtn' + (z.role === ro ? ' on' : ''), esc(T('zooRoleN')[ro]), () => { zooRole(z.id, ro); SND.tap(); saveSoon(); openBest(); }); b.dataset.k = 'zr_' + ro + '_' + z.id; row.appendChild(b); }
+    const fb = btn('zbtn zfree', esc(T('zooFree')), () => { const r2 = zooFree(z.id); toast(T('zooFreeR')[r2] || r2); SND.tap(); saveSoon(); openBest(); }); fb.dataset.k = 'zf_' + z.id; row.appendChild(fb);
     tx.appendChild(row); r.appendChild(tx); md.appendChild(r); }
 }
 /* башня чародея: драконье яйцо */
@@ -13944,7 +13944,7 @@ function bestStudyBox(md, b) {
     o.appendChild(el2('div', 'tx', '<b>' + esc(bestName(k)) + '</b><span>' + esc(T('bestLvN')[2]) + '</span>')); o.appendChild(el2('div', 'pr', C.crys + '◆ ' + C.gold + 'з'));
     o.addEventListener('click', e => { e.stopPropagation(); audioInit(); const r = bestStudy(k); toast(T('bestStR')[r] || r); if (r === 'ok') SND.coin(); else SND.err(); saveSoon(); openB(b.id); }); md.appendChild(o); }
 }
-(function () { const st = document.createElement('style'); st.textContent = '.md .bkn{font-weight:700}.md .bkn.bk2{color:#cfd3ea}.md .bkn.bk3{color:#ffd870}.md .bpi{margin-top:10px}.md .bpi p{margin:6px 0;text-align:left}.md .bpi .lbl{margin-top:12px}'; document.head.appendChild(st); })();
+(function () { const st = document.createElement('style'); st.textContent = '.md .bkn{font-weight:700}.md .bkn.bk2{color:#cfd3ea}.md .bkn.bk3{color:#ffd870}.md .bpi{margin-top:10px}.md .bpi p{margin:6px 0;text-align:left}.md .bpi .lbl{margin-top:12px}.md.bpm{overflow-y:auto}.md.bpm .bpv{flex:0 0 auto;height:min(64vh,135vw)}.md .zoo .row{flex-wrap:wrap;gap:6px;margin-top:6px}.md .zbtn{min-height:30px;padding:3px 10px;border-radius:9px;font-size:12.5px;font-weight:700;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);color:#e8e6f0}.md .zbtn.on{background:rgba(255,216,112,.2);border-color:rgba(255,216,112,.7);color:#ffe9a8}.md .zbtn.zfree{color:#d9b3b3;border-color:rgba(230,150,150,.35)}'; document.head.appendChild(st); })();
 Object.assign(DBGX, { zooUnits: zooUnits, zooFix: zooFix, zooFree: zooFree, eggStart: eggStart, zooNeed: zooNeed, zooLair: zooLair, rtStart: rtStart, rtThink: rtThink, zooCub: zooCub, zooRole: zooRole, zooHourly: zooHourly, zooGuard: zooGuard, zooBox: zooBox, btStrike: btStrike, openBestPage: openBestPage, bestLv: bestLv, bestNeed: bestNeed, bestMul: bestMul, bestWard: bestWard, bestStudy: bestStudy, bestCost: bestCost, bestHourly: bestHourly });
 
 /* ===================== Совет из живых советников — строки и окна ===================== */
