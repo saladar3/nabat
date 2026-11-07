@@ -5493,7 +5493,7 @@ V2.hourly.push(bestHourly);
    Ручной дракон растёт: дракончик (не воюет) → через DRG_TEEN дней молодой (сила драконида) → взрослый (сила дракона без трети),
    когда пройдёт DRG_ADULT дней и наберётся DRG_XP опыта в боях. */
 const ZOO_GROW = 8, ZOO_MAX = 6, ZOO_TRIP = 3, ZOO_HUNGRY = 3, ZOO_LAIR = { wolf: 'wolf', gwolf: 'gwolf', bear: 'bear', spider: 'spider' };
-const ZOO_FOOD = { wolf: 1, gwolf: 1, boar: 1, spider: 1, bear: 2 }, ZOO_CUB_FOOD = 1, DRG_FOOD = [2, 3, 5];
+const ZOO_FOOD = { wolf: 1, gwolf: 1, boar: 1, spider: 1, bear: 1 },      /* медведь ел 2 — в прогонах Kimi 034b уходил голодным почти всегда */ ZOO_CUB_FOOD = 1, DRG_FOOD = [2, 3, 5];
 const ZOO_FARM = { wolf: ['food', 2], gwolf: ['food', 2], boar: ['food', 2], bear: ['wood', 2], spider: ['gold', 1] }, DRG_FORGE = 1.2;
 const EGG_CH = { drake: 0.25, dragon: 0.5 }, EGG_COST = { crys: 5, work: 5 }, DRG_TEEN = 10, DRG_ADULT = 20, DRG_XP = 30, DRG_K = 0.67;
 function zooFix() {
@@ -5547,14 +5547,14 @@ function zooHourly(h) {
   if (h !== 7 || !G.zoo || !G.zoo.length) return;
   for (const z of G.zoo.slice()) {
     if (z.away) continue;
-    const need = zooFood(z); if (G.res.food >= need) { G.res.food -= need; z.hun = 0; } else { z.hun = (z.hun || 0) + 1; if (z.hun >= ZOO_HUNGRY) { G.zoo = G.zoo.filter(q => q !== z); log('zooLeft', { bn: z.k }); continue; } }
+    const need = zooFood(z); if (G.res.food >= need) { G.res.food -= need; z.hun = 0; } else { z.hun = (z.hun || 0) + 1; if (z.hun >= ZOO_HUNGRY) { G.zoo = G.zoo.filter(q => q !== z); log('zooLeft', { bn: z.k }); continue; } log(z.hun >= ZOO_HUNGRY - 1 ? 'zooStarve' : 'zooHungry', { bn: z.k }); }      
     if (zooDrg(z)) {
       if ((z.st || 0) === 0 && G.day - z.born >= DRG_TEEN) { z.st = 1; z.st1 = G.day; z.hp = zooMax(z); log('dragonGrew', { k: 1 }); }
       else if (z.st === 1 && G.day - (z.st1 || z.born) >= DRG_ADULT && (z.xp || 0) >= DRG_XP) { z.st = 2; z.hp = zooMax(z); log('dragonGrew', { k: 2 }); }
     } else if (z.born === G.day - ZOO_GROW && !z.grown) { z.grown = 1; log('zooGrown', { bn: z.k }); }
     if (!zooAdult(z)) continue;
     if (!z.hun) z.hp = Math.min(zooMax(z), z.hp + zooMax(z) * 0.25);      // голодный не поправляется
-    if (z.role === 'farm' && !z.hun && ZOO_FARM[z.k]) addRes(ZOO_FARM[z.k][0], ZOO_FARM[z.k][1]);
+    if (z.role === 'farm' && !z.hun && ZOO_FARM[z.k]) { const F = ZOO_FARM[z.k]; addRes(F[0], F[0] === 'food' && season() === 3 ? F[1] / 2 : F[1]); }      /* зимой охота и огороды дают вдвое меньше (Kimi 034b): зверинец не заменяет амбар */
   }
 }
 V2.hourly.push(zooHourly);
@@ -10546,6 +10546,7 @@ function alertNow() {
   const idle = G.people.filter(p => p.job == null && !special(p)).length; if (idle && G.b.some(b => slotsOf(b) > workersOf(b.id).length)) return ['idle', { n: idle }, openPeople];
   const wn = G.people.filter(p => p.wound).length; if (wn) return ['wounded', { n: wn }, openPeople];
   if (G.why === 'beds') return ['beds', {}, null];
+  if (typeof bestTipAlert === 'function') { const ta = bestTipAlert(); if (ta) return ta; }      /* бестиарий, зверинец, яйцо — подсказка в нужный момент */
   return null;
 }
 let dialH = -1, alT = 0;
@@ -13914,13 +13915,13 @@ mergeStr(STR.ru, {
   bestTameL: 'Можно приручить: из уничтоженного отрядом логова принесут детёныша. Взрослый ходит в поход, сторожит ворота или помогает в хозяйстве', bestTameB: 'Можно приручить: после отбитого набега вепрей в лесу находят поросёнка. Взрослый ходит в поход, сторожит ворота или роет огороды',
   zooT: 'Зверинец', zooP: 'Детёныши изученных зверей растут {d} дн. Взрослый зверь идёт с отрядом в поход (до {n} за раз), ночью сторожит ворота — ловит вора — или помогает в хозяйстве. Звери едят каждое утро; голодный {h} дня — уходит в лес',
   zooEat: 'Зверинец ест: {f} еды в день', zooHung: 'голодает', zooFree: 'Отпустить', zooFreeR: { ok: 'Зверь ушёл в лес', away: 'Он в походе', no: 'Нельзя' },
-  zooFarmN: { wolf: 'охотится: +2 еды в день', gwolf: 'охотится: +2 еды в день', boar: 'роет огороды: +2 еды в день', bear: 'носит брёвна: +2 дерева в день', spider: 'прядёт шёлк: +1 золото в день', dragon: 'греет кузню: мастерская и оружейная на 20% быстрее' },
+  zooFarmN: { wolf: 'охотится: +2 еды в день, зимой +1', gwolf: 'охотится: +2 еды в день, зимой +1', boar: 'роет огороды: +2 еды в день, зимой +1', bear: 'носит брёвна: +2 дерева в день', spider: 'прядёт шёлк: +1 золото в день', dragon: 'греет кузню: мастерская и оружейная на 20% быстрее' },
   drgN: ['дракончик', 'молодой дракон', 'взрослый дракон'], drgL0: 'не воюет · подрастёт через {d} дн.', drgL1: 'до взрослого: дней {d} из {n}, опыта в боях {x} из {m}',
   eggT: 'Драконье яйцо', eggP: 'Яйцо находят в логове драконида или дракона, разорённом отрядом: в одном случае из четырёх у драконида, в одном из двух у дракона. Чародей высиживает его {d} дн. работы; выйдет ручной дракон', eggN: 'Яиц: {n}', eggB: 'Высидеть', eggCur: 'Чародей греет яйцо · {p}%',
   eggR: { ok: 'Чародей сел греть яйцо', mage: 'Нужен чародей в башне', none: 'Яиц нет', busy: 'Уже греет другое', full: 'В зверинце нет места', res: 'Мало кристаллов' },
   zooNone: 'Пока никого. Изучите зверя у чародея — отряд принесёт детёныша из разорённого логова, а поросёнка найдёт после отбитого набега вепрей', zooCubL: 'детёныш · вырастет через {d} дн.', zooAdL: 'здоровье {h} из {m}', zooAway: 'в походе',
   zooRoleN: { trip: 'В поход', guard: 'Сторож', farm: 'В хозяйстве' },
-  log: { bestStudy: 'Чародей изучает трофей: {bn}', bestDone: 'Изучено: {bn}. Отряд знает, куда бить', zooCub: 'Отряд принёс детёныша: {bn}', zooGrown: 'Детёныш вырос: {bn}. Его можно брать в поход или ставить сторожем', zooFell: 'Прирученный зверь пал в бою: {bn}', zooCatch: 'Сторожевой зверь поймал вора у ворот: {bn}', zooFree: 'Зверь отпущен в лес: {bn}', zooLeft: 'Голодный зверь ушёл в лес: {bn}', eggFound: 'В логове нашли драконье яйцо!', eggStart: 'Чародей сел греть драконье яйцо', eggHatched: 'Из яйца вылупился дракончик!', dragonGrew: 'Ручной дракон подрос' }
+  log: { zooHungry: 'Зверь голодает: {bn}. Покормите его, иначе уйдёт в лес', zooStarve: 'Зверь изголодался: {bn}. Завтра уйдёт в лес', bestStudy: 'Чародей изучает трофей: {bn}', bestDone: 'Изучено: {bn}. Отряд знает, куда бить', zooCub: 'Отряд принёс детёныша: {bn}', zooGrown: 'Детёныш вырос: {bn}. Его можно брать в поход или ставить сторожем', zooFell: 'Прирученный зверь пал в бою: {bn}', zooCatch: 'Сторожевой зверь поймал вора у ворот: {bn}', zooFree: 'Зверь отпущен в лес: {bn}', zooLeft: 'Голодный зверь ушёл в лес: {bn}', eggFound: 'В логове нашли драконье яйцо!', eggStart: 'Чародей сел греть драконье яйцо', eggHatched: 'Из яйца вылупился дракончик!', dragonGrew: 'Ручной дракон подрос' }
 });
 mergeStr(STR.en, {
   bestLvN: ['not met', 'met', 'learned in battle', 'studied by the mage'], bestLvT: 'Knowledge: {l}',
@@ -13936,15 +13937,36 @@ mergeStr(STR.en, {
   bestTameL: 'Can be tamed: from a lair the squad destroys, they bring back a cub. Grown, it goes on expeditions, guards the gates or helps around the town', bestTameB: 'Can be tamed: after a boar raid is beaten off, a piglet is found in the woods. Grown, it goes on expeditions, guards the gates or digs the gardens',
   zooT: 'Menagerie', zooP: 'Cubs of studied beasts grow for {d} days. A grown beast goes on expeditions with the squad (up to {n} at a time), guards the gates at night and catches a thief, or helps around the town. Beasts eat every morning; hungry for {h} days, one leaves for the woods',
   zooEat: 'The menagerie eats {f} food a day', zooHung: 'hungry', zooFree: 'Release', zooFreeR: { ok: 'The beast went off to the woods', away: 'It is on an expedition', no: 'Not possible' },
-  zooFarmN: { wolf: 'hunts: +2 food a day', gwolf: 'hunts: +2 food a day', boar: 'digs the gardens: +2 food a day', bear: 'hauls logs: +2 wood a day', spider: 'spins silk: +1 gold a day', dragon: 'heats the forge: workshop and armory work 20% faster' },
+  zooFarmN: { wolf: 'hunts: +2 food a day, +1 in winter', gwolf: 'hunts: +2 food a day, +1 in winter', boar: 'digs the gardens: +2 food a day, +1 in winter', bear: 'hauls logs: +2 wood a day', spider: 'spins silk: +1 gold a day', dragon: 'heats the forge: workshop and armory work 20% faster' },
   drgN: ['dragon hatchling', 'young dragon', 'grown dragon'], drgL0: 'does not fight · grows in {d} days', drgL1: 'to adulthood: days {d} of {n}, battle experience {x} of {m}',
   eggT: 'Dragon egg', eggP: 'An egg is found in a drake or dragon lair smashed by the squad — one lair in four for a drake, one in two for a dragon. The mage hatches it in {d} days of work; a tame dragon comes out', eggN: 'Eggs: {n}', eggB: 'Hatch', eggCur: 'The mage is warming the egg · {p}%',
   eggR: { ok: 'The mage sat down to warm the egg', mage: 'Needs a mage in the tower', none: 'No eggs', busy: 'Already warming another', full: 'No room in the menagerie', res: 'Not enough crystals' },
   zooNone: 'Nobody yet. Study a beast with the mage — the squad brings a cub from a smashed lair, or finds a piglet after a beaten boar raid', zooCubL: 'cub · grows up in {d} days', zooAdL: 'health {h} of {m}', zooAway: 'on an expedition',
   zooRoleN: { trip: 'Expedition', guard: 'Guard', farm: 'Town work' },
-  log: { bestStudy: 'The mage studies a trophy: {bn}', bestDone: 'Studied: {bn}. The squad knows where to strike', zooCub: 'The squad brought back a cub: {bn}', zooGrown: 'The cub has grown: {bn}. It can go on expeditions or guard the town', zooFell: 'A tamed beast fell in battle: {bn}', zooCatch: 'The beast on guard caught a thief at the gates: {bn}', zooFree: 'A beast was released into the woods: {bn}', zooLeft: 'A hungry beast left for the woods: {bn}', eggFound: 'A dragon egg was found in the lair!', eggStart: 'The mage sat down to warm a dragon egg', eggHatched: 'A dragon hatchling has come out of the egg!', dragonGrew: 'The tame dragon has grown' }
+  log: { zooHungry: 'A beast is starving: {bn}. Feed it or it will leave for the woods', zooStarve: 'The beast is famished: {bn}. It leaves for the woods tomorrow', bestStudy: 'The mage studies a trophy: {bn}', bestDone: 'Studied: {bn}. The squad knows where to strike', zooCub: 'The squad brought back a cub: {bn}', zooGrown: 'The cub has grown: {bn}. It can go on expeditions or guard the town', zooFell: 'A tamed beast fell in battle: {bn}', zooCatch: 'The beast on guard caught a thief at the gates: {bn}', zooFree: 'A beast was released into the woods: {bn}', zooLeft: 'A hungry beast left for the woods: {bn}', eggFound: 'A dragon egg was found in the lair!', eggStart: 'The mage sat down to warm a dragon egg', eggHatched: 'A dragon hatchling has come out of the egg!', dragonGrew: 'The tame dragon has grown' }
 });
-Object.assign(LOUD, { bestDone: 1, zooCub: 1, zooGrown: 1, zooFell: 1, zooCatch: 1, zooLeft: 1, eggFound: 1, eggHatched: 1, dragonGrew: 1 });
+mergeStr(STR.ru, { al: { tipHung: 'Зверинец голодает: голодный зверь уйдёт в лес. Коснитесь — зверинец', tipStudy: 'Чародей может изучить трофей: урон по твари на {p}% выше. Коснитесь — башня', tipEgg: 'Драконье яйцо ждёт: чародей высидит его в башне. Коснитесь — башня', tipCub: 'Детёныш в зверинце: вырастет за {d} дней. Коснитесь — зверинец', tipGrown: 'Зверь вырос: в поход, сторожем или в хозяйство. Коснитесь — зверинец', tipDrg: 'Дракончик вырос: берите в поход или ставьте греть кузню', tipBest2: '{n}: повадки открыты в бестиарии. Коснитесь — страница', tipBest1: 'В бестиарии новая запись: {n}. Коснитесь — бестиарий' } });
+mergeStr(STR.en, { al: { tipHung: 'The menagerie is hungry: a hungry beast will leave. Tap for the menagerie', tipStudy: 'The mage can study a trophy: damage against it {p}% higher. Tap for the tower', tipEgg: 'A dragon egg waits: the mage can hatch it in the tower. Tap for the tower', tipCub: 'A cub in the menagerie: grown in {d} days. Tap for the menagerie', tipGrown: 'The beast has grown: expeditions, gate guard or town work. Tap for the menagerie', tipDrg: 'The hatchling grew: take it on expeditions or to heat the forge', tipBest2: '{n}: habits open in the bestiary. Tap for the page', tipBest1: 'New bestiary entry: {n}. Tap for the bestiary' } });
+/* подсказки в нужный момент (Kimi 035): по одной, в полосе подсказки, 15 с или до касания; флаги — в G (у каждого города свои) */
+let TIPCUR = null;
+function bestTipAlert() {
+  if (!G || G.battle || view !== 'town' || (SV.set && SV.set.hintOff)) return null;
+  const now = performance.now(); if (TIPCUR) { if (now < TIPCUR.until && G[TIPCUR.f]) return [TIPCUR.f, TIPCUR.a, TIPCUR.fn]; TIPCUR = null; }
+  const tw = () => G.b.find(b => b.type === 'magetower' && active(b)), toTw = () => { const t = tw(); if (t) openB(t.id); else openBest(); };
+  const zoo = G.zoo || [], k2 = BEAST.find(k => bestLv(k) === 2), k1 = BEAST.find(k => G.best && G.best[k] && G.best[k].seen);
+  const L = [
+    ['tipHung', zoo.some(z => !z.away && (z.hun || 0) >= 1), {}, openBest],
+    ['tipStudy', !!k2 && !!tw() && typeof mageOn === 'function' && mageOn() && !(G.acad && G.acad.bs), { p: Math.round((BEST_MUL - 1) * 100) }, toTw],
+    ['tipEgg', (G.eggs || 0) >= 1 && !(G.acad && G.acad.egg) && !!tw(), {}, toTw],
+    ['tipCub', zoo.length > 0, { d: ZOO_GROW }, openBest],
+    ['tipGrown', zoo.some(z => !zooDrg(z) && zooAdult(z)), {}, openBest],
+    ['tipDrg', zoo.some(z => zooDrg(z) && (z.st || 0) >= 1), {}, openBest],
+    ['tipBest2', !!k2, { n: k2 ? bestName(k2) : '' }, () => openBestPage(k2)],
+    ['tipBest1', !!k1, { n: k1 ? bestName(k1) : '' }, openBest]];
+  for (const [f, ok, a, go] of L) if (ok && !G[f]) { G[f] = 1; TIPCUR = { f: f, a: a, until: now + 15000, fn: () => { TIPCUR = null; go(); } }; return [f, a, TIPCUR.fn]; }
+  return null;
+}
+Object.assign(LOUD, { zooHungry: 1, zooStarve: 1, bestDone: 1, zooCub: 1, zooGrown: 1, zooFell: 1, zooCatch: 1, zooLeft: 1, eggFound: 1, eggHatched: 1, dragonGrew: 1 });
 function bestName(k) { return (bestIsBoss(k) && T('bossN') && T('bossN')[k]) || (T('best')[k] && T('best')[k][0]) || (T('monN') && T('monN')[k]) || k; }
 /* уровень для окна: у великих тварей «встречен» — и когда логово найдено (как в списке великих тварей) */
 function bestLvUI(k, seen) { return Math.max(bestLv(k), seen ? 1 : 0); }
@@ -14015,7 +14037,7 @@ function bestStudyBox(md, b) {
     o.addEventListener('click', e => { e.stopPropagation(); audioInit(); const r = bestStudy(k); toast(T('bestStR')[r] || r); if (r === 'ok') SND.coin(); else SND.err(); saveSoon(); openB(b.id); }); md.appendChild(o); }
 }
 (function () { const st = document.createElement('style'); st.textContent = '.md .bkn{font-weight:700}.md .bkn.bk2{color:#cfd3ea}.md .bkn.bk3{color:#ffd870}.md .bpi{margin-top:10px}.md .bpi p{margin:6px 0;text-align:left}.md .bpi .lbl{margin-top:12px}.md.bpm{overflow-y:auto}.md.bpm .bpv{flex:0 0 auto;height:min(64vh,135vw)}.md .zoo .row{flex-wrap:wrap;gap:6px;margin-top:6px}.md .zbtn{min-height:30px;padding:3px 10px;border-radius:9px;font-size:12.5px;font-weight:700;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);color:#e8e6f0}.md .zbtn.on{background:rgba(255,216,112,.2);border-color:rgba(255,216,112,.7);color:#ffe9a8}.md .zbtn.zfree{color:#d9b3b3;border-color:rgba(230,150,150,.35)}'; document.head.appendChild(st); })();
-Object.assign(DBGX, { zooUnits: zooUnits, zooFix: zooFix, zooFree: zooFree, eggStart: eggStart, zooNeed: zooNeed, zooLair: zooLair, rtStart: rtStart, rtThink: rtThink, zooCub: zooCub, zooRole: zooRole, zooHourly: zooHourly, zooGuard: zooGuard, zooBox: zooBox, btStrike: btStrike, openBestPage: openBestPage, bestLv: bestLv, bestNeed: bestNeed, bestMul: bestMul, bestWard: bestWard, bestStudy: bestStudy, bestCost: bestCost, bestHourly: bestHourly });
+Object.assign(DBGX, { bestTipAlert: bestTipAlert, alertNow: alertNow, zooUnits: zooUnits, zooFix: zooFix, zooFree: zooFree, eggStart: eggStart, zooNeed: zooNeed, zooLair: zooLair, rtStart: rtStart, rtThink: rtThink, zooCub: zooCub, zooRole: zooRole, zooHourly: zooHourly, zooGuard: zooGuard, zooBox: zooBox, btStrike: btStrike, openBestPage: openBestPage, bestLv: bestLv, bestNeed: bestNeed, bestMul: bestMul, bestWard: bestWard, bestStudy: bestStudy, bestCost: bestCost, bestHourly: bestHourly });
 
 /* ===================== Совет из живых советников — строки и окна ===================== */
 mergeStr(STR.ru, {
