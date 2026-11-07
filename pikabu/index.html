@@ -2246,7 +2246,7 @@ function btSpecial(B, u, M, foes) {
     let bd = null, bn = 0; for (const dir of [[0, 1], [1, 0], [-1, 0], [0, -1]]) { const ts = btCone(u, dir, M.breath[0]); let n = 0; for (const f of foes) if (ts.some(p => p[0] === f.x && p[1] === f.y)) n++; if (n > bn) { bn = n; bd = ts; } }
     if (bn >= 2 || (bn === 1 && !foes.some(f => cheb(f, u) <= 1))) {
       cd.br = 3; B.ev.push({ k: 'breath', id: u.id, t: bd });
-      for (const p of bd) { const i = bi(p[0], p[1]); if (B.g[i] === 2) continue; if (B.g[i] === 1) B.g[i] = 0; B.fire[i] = Math.max(B.fire[i] || 0, 2); const t = btAt(B, p[0], p[1]); if (t && t !== u) btHurt(B, t, Math.round(M.breath[1] * (t.def ? 0.7 : 1) * (t.stand > 0 ? 0.6 : 1) * (0.9 + btRnd(B) * 0.2)), u, { magic: 1, fire: 1 }); }
+      for (const p of bd) { const i = bi(p[0], p[1]); if (B.g[i] === 2) continue; if (B.g[i] === 1) B.g[i] = 0; B.fire[i] = Math.max(B.fire[i] || 0, 2); const t = btAt(B, p[0], p[1]); if (t && t !== u) btHurt(B, t, Math.round(M.breath[1] * (u.tame && M.d ? u.d / M.d : 1) * (t.def ? 0.7 : 1) * (t.stand > 0 ? 0.6 : 1) * (0.9 + btRnd(B) * 0.2)), u, { magic: 1, fire: 1 }); }
       return true;
     }
   }
@@ -4313,7 +4313,7 @@ function rtSpecial(B, u, M, dt) {
   if ((M.web || M.net) && dd < 300 && rtCd(B, u, 'web', 7)) { let tt = t; if (M.net) { let s0 = -1; for (const f of fs) if (rtD(u, f) < 300 && !(f.s.root > 0) && (f.d || 0) > s0) { s0 = f.d || 0; tt = f; } }      /* ловец метает сеть в самого грозного бойца рядом, как в схватке */
     R.pr.push({ x: u.px, y: u.py - 14, tx: tt.px, ty: tt.py, tid: tt.id, sp: 380, d: 2, o: { rngd: 1 }, from: u.id, k: 'web' }); tt.s.root = 2.5; u.an = 'atk'; u.at = 0; u.swL = null; return true; }
   if (M.scream && dd < 240 && rtCd(B, u, 'scream', 15)) { R.tele.push({ k: 'circle', x: u.px, y: u.py, r: 140, t0: R.t, t1: R.t + 0.8, by: u.id, side: u.side, stun: 1.6, mul: 0.3 }); u.an = 'cast'; u.at = 0; return true; }
-  if (M.breath && dd < M.breath[0] * RTC * 0.8 + 40 && rtCd(B, u, 'breath', 12)) { const a = Math.atan2(t.py - u.py, t.px - u.px); R.tele.push({ k: 'cone', x: u.px, y: u.py - 10, a: a, len: M.breath[0] * RTC * 0.8, half: 0.42, t0: R.t, t1: R.t + 1.1, by: u.id, side: u.side, dmg: M.breath[1] * RTK, fire: 1 }); u.an = 'cast'; u.at = 0; u.face = Math.cos(a) >= 0 ? 1 : -1; return true; }
+  if (M.breath && dd < M.breath[0] * RTC * 0.8 + 40 && rtCd(B, u, 'breath', 12)) { const a = Math.atan2(t.py - u.py, t.px - u.px); R.tele.push({ k: 'cone', x: u.px, y: u.py - 10, a: a, len: M.breath[0] * RTC * 0.8, half: 0.42, t0: R.t, t1: R.t + 1.1, by: u.id, side: u.side, dmg: M.breath[1] * RTK * (u.tame && M.d ? u.d / M.d : 1), fire: 1 });      /* ручной взрослый дракон дышит в ту же силу, что бьёт (DRG_K) */ u.an = 'cast'; u.at = 0; u.face = Math.cos(a) >= 0 ? 1 : -1; return true; }
   if (M.smash && dd < 140 && rtCd(B, u, 'smash', 8)) { R.tele.push({ k: 'circle', x: t.px, y: t.py, r: 80, t0: R.t, t1: R.t + 0.9, by: u.id, side: u.side, mul: 1.5, push: 1 }); u.an = 'cast'; u.at = 0; return true; }
   if (M.charge && dd > 120 && dd < 380 && rtCd(B, u, 'charge', 8)) { R.tele.push({ k: 'line', x: u.px, y: u.py, x2: t.px, y2: t.py, w: 34, t0: R.t, t1: R.t + 0.7, by: u.id, side: u.side, mul: 1.6, dash: 1 }); u.an = 'cast'; u.at = 0; return true; }
   if (u.boss && typeof bossAct === 'function') return bossAct(B, u, near, dt);
@@ -8228,7 +8228,13 @@ function rtDrawUnit(B, u, t) {
   if (u.s && u.s.reflect && !dead) { ctx.strokeStyle = 'rgba(255,226,122,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(X, Y - 30 * z, 34 * z, 40 * z, 0, 0, 6.3); ctx.stroke(); }
   if (u.s && u.s.stone && !dead) { ctx.globalAlpha = 1; }
   if (darkB) { ctx.fillStyle = 'rgba(16,20,30,0.3)'; ctx.beginPath(); ctx.ellipse(X - (u.face || 1) * 14 * z, Y + sink * z, 22 * z, 6 * z, 0, 0, 6.3); ctx.fill(); ctx.globalAlpha *= 0.86; }
-  const tl = tilt !== 0 || sink !== 0; if (tl) { ctx.save(); ctx.translate(X, Y + sink * z); ctx.rotate(tilt); ctx.translate(-X, -Y); }      // павший: тень-пятно под телом и чуть бледнее (без ctx.filter — он в разы дороже)
+  let pivY = 0, scX = 1, scY = 1;
+  if (tilt !== 0 && !h3 && !u.ba) { const Mq = btM(u); if (Mq.fam === 'beast' || Mq.fam === 'dragon') {      /* четвероногий не встаёт «на дыбы»: в полёте кувыркается вокруг середины тела, упавший и павший лежат низко */
+    const dir = tilt > 0 ? 1 : -1, k = Math.min(1, Math.abs(tilt) / 1.3), bh = (Mq.scale ? 60 : Mq.big ? 34 : 18) * z;
+    if (!dead && u.kb && u.kb.z > 0) { tilt = -dir * KBQ.air * clamp((u.kb.vz || 0) / 300, -1, 1); pivY = bh * 0.55; }
+    else { tilt = dir * KBQ.lie * k; scY = 1 - 0.3 * k; scX = 1 + 0.06 * k; }
+  } }
+  const tl = tilt !== 0 || sink !== 0 || scY !== 1; if (tl) { ctx.save(); ctx.translate(X, Y + sink * z - pivY); ctx.rotate(tilt); if (scY !== 1) ctx.scale(scX, scY); ctx.translate(-X, -(Y - pivY)); }      // павший: тень-пятно под телом и чуть бледнее (без ctx.filter — он в разы дороже)
   TSLAST.cv = null; let drawn = !!(u.ba && typeof bstDraw === 'function' && bstDraw(B, u, X, Y, z, t)); const fr = dead ? 0 : Math.floor((u.an === 'atk' || u.an === 'cast' ? u.at * 12 : t * 10) + u.id * 1.3);      // павший не «дышит»
   if (drawn) { } else if (L && TS.ready && TSD[rtAnimKey(L[0], u)]) { const k = rtAnimKey(L[0], u), D = TSD[k], cv = u.und ? tsRemap(k, 'und', tsUndFn) : tsUnit(k, L[1]); tsBlit(cv, D, (u.an === 'atk' || u.an === 'cast') ? (u.an === 'atk' && typeof rtAtkFrame === 'function' ? rtAtkFrame(u, D.n) : Math.min(D.n - 1, Math.floor(u.at * 14))) : fr, X, Y, TSS * z * 1.7 * L[2], (u.face || 1) < 0, 6); drawn = true; }
   else if (L && (L[0] === 'hmage' || L[0] === 'hnecro' || L[0] === 'hwar')) drawn = heroSprDraw(L[0], u, X, Y, TSS * z * 1.7 * L[2], t);
@@ -8252,6 +8258,7 @@ function rtDrawUnit(B, u, t) {
   if (s.curse) { ctx.fillStyle = '#8fc06a'; ctx.font = '800 ' + Math.round(10 + 2 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; ctx.fillText('✕', X - 14 * z, top - 2); }
   if (u.boss && u.side === 1 && !u.und && !u.ba && !(typeof cineBoss === 'function' && cineBoss(B) === u)) { const tp = top - (btM(u).scale ? 40 : 30) * z; ctx.fillStyle = '#ffd870'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; ctx.font = '800 ' + Math.round(10 + 3 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; const nm = (T('bossN')[u.boss] || '') + (u.heads ? ' · ' + fill(T('rtTxt').headsN || '{n}', { n: u.heads }) : ''); ctx.strokeText(nm, X, tp); ctx.fillText(nm, X, tp); }
 }
+const KBQ = { air: 0.6, lie: 0.2 };      /* наклоны четвероногих: в полёте (знак — подбор по кадрам) и лёжа */
 function rtDrawOb(B, ob, t) {
   const X = rX(ob.x), Y = rY(ob.y), z = RTV.z, pal = terrPal();
   if (ob.k === 'tree' && TS.ready) { const k = (Math.round(ob.x) % 3) ? 'tree1' : 'tree3', D = TSD[k], cv = pal === 'winter' ? tsRemap(k, 'w', tsWinterFol) : pal === 'autumn' && k === 'tree3' ? tsCanvas('tree4') : tsCanvas(k); tsBlit(cv, k === 'tree3' && pal === 'autumn' ? TSD.tree4 : D, Math.floor(t * 8 + ob.x), X, Y + 8 * z, TSS * z * 1.15, false, 6); return; }
