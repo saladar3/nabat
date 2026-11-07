@@ -8121,6 +8121,23 @@ function rtCamera(aw, ah) {
 }
 function rtCamZoomBy(k) { const cam = RTV.cam; if (!cam) return; cam.uz = clamp((cam.uz || cam.k || 1) * k, 1, 3.2); }
 function rtCamPan(dx, dy) { const cam = RTV.cam; if (!cam || !RTV.z) return; cam.px -= dx / RTV.z; cam.py -= dy / RTV.z; cam.panT = performance.now(); }
+/* земля поля: пятна иной травы, тропа к логову, вытоптанное кольцо у входа, мелкий декор — один раз на бой, в подложке (Kimi 028, п. 1) */
+function rtGround(g, B, R, pal, key) {
+  let hs = 0x51ab; for (let i = 0; i < key.length; i++) hs = (Math.imul(hs, 31) + key.charCodeAt(i)) | 0; const rnd = rng(hs >>> 0);
+  const inZone = (x, y, m) => R.zn.some(q => x > q.x - m && x < q.x + q.w + m && y > q.y - m && y < q.y + q.h + m), inOb = (x, y, m) => R.ob.some(o => Math.hypot(x - o.x, y - o.y) < o.r + m);
+  const win = pal === 'winter', aut = pal === 'autumn', patch = win ? ['rgba(255,255,255,0.22)', 'rgba(150,170,200,0.14)'] : aut ? ['rgba(196,150,70,0.16)', 'rgba(120,96,52,0.14)'] : ['rgba(128,172,94,0.16)', 'rgba(70,110,52,0.14)'];
+  for (let i = 0; i < 26; i++) { const x = rnd() * RTW, y = 30 + rnd() * (RTH - 60), rx = 26 + rnd() * 60; if (inZone(x, y, rx * 0.5)) continue;
+    g.fillStyle = patch[i % 3 ? 0 : 1]; g.beginPath(); g.ellipse(x, y, rx, rx * (0.4 + rnd() * 0.25), 0, 0, 6.3); g.fill(); }
+  const mx = RTC * R.sx * 4.5, my = RTC * R.sy * 1.0, dirt = win ? 'rgba(120,130,150,0.24)' : 'rgba(141,104,87,0.26)', dirt2 = win ? 'rgba(110,118,140,0.28)' : 'rgba(116,81,75,0.3)';
+  for (let i = 0; i < 9; i++) { const q = i / 8, x = mx + (rnd() - 0.5) * 70 + Math.sin(q * 5.1) * 26, y = RTH - 6 - q * (RTH - my - 46); if (inZone(x, y, 4)) continue;
+    g.fillStyle = dirt; g.beginPath(); g.ellipse(x, y, 18 + rnd() * 16, 8 + rnd() * 7, 0, 0, 6.3); g.fill(); }
+  for (let i = 0; i < 7; i++) { const a = rnd() * 6.3, d = 32 + rnd() * 48; g.fillStyle = dirt2; g.beginPath(); g.ellipse(mx + Math.cos(a) * d, my + 22 + Math.sin(a) * d * 0.4, 13 + rnd() * 13, 5 + rnd() * 5, 0, 0, 6.3); g.fill(); }
+  if (!TS.ready || typeof tsBlitG !== 'function') return;
+  const deco = win ? ['stump1', 'stump3'] : ['deco06', 'deco07', 'deco08', 'deco09', 'deco10', 'bush2', 'bush4', 'stump3'];
+  for (let i = 0, placed = 0; i < 60 && placed < 12; i++) { const x = 16 + rnd() * (RTW - 32), y = 40 + rnd() * (RTH - 56), k = deco[(rnd() * deco.length) | 0], sc = 0.5 + rnd() * 0.25;
+    if (!TSD[k] || inZone(x, y, 14) || inOb(x, y, 26) || Math.hypot(x - mx, y - my) < 84) continue;
+    g.save(); g.globalAlpha = 0.9; tsBlitG(g, k, 0, x, y, sc, (x | 0) % 2 === 1); g.restore(); placed++; }
+}
 /* фон поля: трава набора, топь, холмы, вход в логово, лес по краям — один раз на бой */
 function rtBgBuild(B) {
   const R = B.rt, key = B.tid + ':' + B.lid + ':' + B.rs0 + ':' + (terrPal ? terrPal() : ''); if (RTV.bg && RTV.bgKey === key) return RTV.bg;
@@ -8129,8 +8146,8 @@ function rtBgBuild(B) {
   if (TS.ready) tg.drawImage(tsCanvas(B.tr === 'swamp' || B.tr === 'lake' ? 'tiles3' : B.tr === 'steppe' || B.tr === 'volcano' ? 'tiles4' : B.tr === 'mount' || B.tr === 'hills' ? 'tiles2' : 'tiles1'), 64, 64, 64, 64, 0, 0, 64, 64); else { tg.fillStyle = '#8db24e'; tg.fillRect(0, 0, 64, 64); }
   if (pal !== 'summer') { const im = tg.getImageData(0, 0, 64, 64), d = im.data, fn = TS_SEAS[pal]; for (let i = 0; i < d.length; i += 4) { const o = fn(d[i], d[i + 1], d[i + 2]); if (o) { d[i] = o[0]; d[i + 1] = o[1]; d[i + 2] = o[2]; } } tg.putImageData(im, 0, 0); }
   const pat = g.createPattern(tex, 'repeat'); g.save(); g.scale(0.5, 0.5); g.fillStyle = pat; g.fillRect(0, 0, RTW * 2, RTH * 2); g.restore();
+  rtGround(g, B, R, pal, key);
   if (B.tr === 'volcano') { g.fillStyle = 'rgba(60,40,30,0.35)'; g.fillRect(0, 0, RTW, RTH); }
-  if (B.night) { }
   for (const z of R.zn) {
     if (z.k === 'swamp') { g.fillStyle = pal === 'winter' ? '#9cc7d6' : '#4f8f86'; rr(g, z.x + 6, z.y + 8, z.w - 12, z.h - 14, 18); g.fill(); g.strokeStyle = TSP.mint; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(30,60,40,0.4)'; for (let k = 0; k < 4; k++) { ci(g, z.x + 18 + k * 15, z.y + 30 + (k % 2) * 16, 3); } }
     if (z.k === 'water') { g.fillStyle = '#3a8fb0'; rr(g, z.x + 4, z.y, z.w - 8, z.h - 6, 26); g.fill(); g.strokeStyle = '#cfeaf2'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(207,234,242,0.6)'; for (let k = 0; k < 6; k++) g.fillRect(z.x + 20 + (k * 53) % (z.w - 40), z.y + 18 + (k * 29) % (z.h - 40), 18, 3); }
@@ -8181,7 +8198,8 @@ function rtDrawUnit(B, u, t) {
   else if (!u.ba && u.kb && u.kb.down) tilt = -(u.face || 1) * Math.min(1.3, u.kb.t * 7);
   else if (!u.ba && u.upT != null && B.rt.t - u.upT < 0.4) tilt = -(u.face || 1) * 1.3 * (1 - (B.rt.t - u.upT) / 0.4);
   else if (!u.ba && !h3 && u.an === 'hurt' && u.at < 0.22 && !dead) tilt = -(u.face || 1) * 0.16 * (1 - u.at / 0.22);
-  if (u.kb && u.kb.z > 0) { ctx.fillStyle = 'rgba(16,20,30,0.25)'; ctx.beginPath(); ctx.ellipse(X, rY(u.py), 12 * z, 4 * z, 0, 0, 6.3); ctx.fill(); }
+  if (!h3 && !u.ba && !darkB) { const M0 = btM(u), lift = u.kb && u.kb.z > 0 ? Math.min(0.5, u.kb.z * 0.004) : 0, shR = (u.hero ? 15 : M0.scale ? 34 : M0.big ? 24 : 12) * z * (1 - lift);      /* тень под каждым бойцом: фигура стоит на траве (Kimi 028, п. 2) */
+    ctx.fillStyle = 'rgba(16,20,30,' + (M0.fly ? 0.13 : 0.24 - lift * 0.12) + ')'; ctx.beginPath(); ctx.ellipse(X, rY(u.py + (u.jy || 0) * 0.6) + 1.5 * z, shR, shR * 0.33, 0, 0, 6.3); ctx.fill(); }
   // аура некроманта
   if (u.hero === 'necro' && !dead) { const r = rtAura(B, u) * z; ctx.fillStyle = 'rgba(90,255,190,0.07)'; ci(ctx, X, Y, r); ctx.strokeStyle = 'rgba(120,255,200,' + (0.28 + Math.sin(t * 2) * 0.08) + ')'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.92, 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]); }
   if (u.und && u.side === 0 && !dead) { const rr = (btM(u).scale ? 46 : btM(u).big ? 30 : 17) * z; ctx.fillStyle = 'rgba(80,255,180,' + (0.13 + Math.sin(t * 3 + u.id) * 0.04) + ')'; ctx.beginPath(); ctx.ellipse(X, Y, rr, rr * 0.38, 0, 0, 6.3); ctx.fill(); }      // зелёная дымка под поднятым
@@ -8291,8 +8309,8 @@ function renderRt(t) {
   if (typeof bstFrameTick === 'function') { bstFrameTick(B); bstEvents(B, z); bstPartDraw(z); }
   for (const p of R.pr) rtDrawPr(B, p, t);
   for (const f of R.fx || []) rtDrawFx(B, f, t);
-  // ночь — лёгкая синева
-  if (B.night) { ctx.fillStyle = 'rgba(20,30,70,0.28)'; ctx.fillRect(RTV.ox, RTV.oy, RTW * z, RTH * z); }
+  // ночь — темнота с кругами света у героя, отряда и огня
+  if (B.night) rtNight(B, t, z);
   // замедление, пока рисуется знак
   if (R.slow < 1) { ctx.fillStyle = 'rgba(40,70,140,0.16)'; ctx.fillRect(0, 0, W, H); }
   if (typeof rtTrailDraw === 'function') rtTrailDraw(t);
@@ -8301,6 +8319,25 @@ function renderRt(t) {
   if (typeof bstHolding === 'function' && bstHolding(B) && typeof cineText === 'function') cineText((typeof lang !== 'undefined' && lang === 'en' ? 'Loading' : 'Загрузка') + '.'.repeat(1 + Math.floor(t * 3) % 3), W / 2, H * 0.42, 15, 'rgba(255,255,255,0.85)', 1, false);      // кадры зверя в пути
   if (typeof cineDraw === 'function') cineDraw(B, t);
   if (R.ph === 'prep') { const y0 = RTC * R.sy * 3, hh = RTC * R.sy * 4; ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(rX(0), rY(y0), RTW * z, hh * z); ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.strokeRect(rX(0), rY(y0), RTW * z, hh * z); ctx.setLineDash([]); }
+}
+/* ночь в бою: тьма вокруг, круг света у героя, тёплый ореол у огня и горящих (Kimi 028, п. 3).
+   Без растяжения холста на весь экран: круг — готовый спрайт 1:1 по пикселям экрана, остальное — четыре прямоугольника. */
+function rtNight(B, t, z) {
+  if (!lightSpr) mkLight();
+  const R = B.rt, h = rtHeroU(B), dark = 'rgba(8,12,40,0.5)', v = RTV.night || (RTV.night = {});
+  const rd = Math.round(150 * z * DPR), r2 = rd * 2 / DPR;
+  if (!v.sp || v.rd !== rd) { const c = document.createElement('canvas'); c.width = c.height = rd * 2; const g = c.getContext('2d'); g.fillStyle = dark; g.fillRect(0, 0, rd * 2, rd * 2); g.globalCompositeOperation = 'destination-out'; g.drawImage(lightSpr, 0, 0, rd * 2, rd * 2); v.sp = c; v.rd = rd; }
+  ctx.fillStyle = dark;
+  if (h && h.hp > 0 && !h.out) {
+    const x0 = Math.round((rX(h.px) * DPR) - rd) / DPR, y0 = Math.round((rY(h.py) - 20 * z) * DPR - rd) / DPR, x1 = x0 + r2, y1 = y0 + r2;
+    if (y0 > 0) ctx.fillRect(0, 0, W, y0); if (y1 < H) ctx.fillRect(0, y1, W, H - y1); if (x0 > 0) ctx.fillRect(0, Math.max(0, y0), x0, Math.min(H, y1) - Math.max(0, y0)); if (x1 < W) ctx.fillRect(x1, Math.max(0, y0), W - x1, Math.min(H, y1) - Math.max(0, y0));
+    ctx.drawImage(v.sp, x0, y0, r2, r2);
+  } else ctx.fillRect(0, 0, W, H);
+  let any = false; for (const q of R.zn) if (q.k === 'fire') { any = true; break; } if (!any) for (const u of B.u) if (u.hp > 0 && u.burnT > R.t) { any = true; break; }
+  if (any) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
+    for (const q of R.zn) if (q.k === 'fire') { const cx = rX(q.x + q.w / 2), cy = rY(q.y + q.h / 2), r = Math.max(q.w, q.h) * z * 0.62; ctx.drawImage(glowSpr, cx - r, cy - r * 0.7, r * 2, r * 1.4); }
+    for (const u of B.u) if (u.hp > 0 && u.burnT > R.t && u.px != null) { const r = 46 * z; ctx.drawImage(glowSpr, rX(u.px) - r, rY(u.py) - 20 * z - r, r * 2, r * 2); }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
 }
 
 /* ===================== Свои спрайты в духе набора: герои-маги, чудища края ===================== */
