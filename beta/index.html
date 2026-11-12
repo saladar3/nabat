@@ -8455,6 +8455,7 @@ function rtNight(B, t, z) {
     for (const q of R.zn) if (q.k === 'fire') { const cx = rX(q.x + q.w / 2), cy = rY(q.y + q.h / 2), r = Math.max(q.w, q.h) * z * 0.62; ctx.drawImage(glowSpr, cx - r, cy - r * 0.7, r * 2, r * 1.4); }
     for (const u of B.u) if (u.hp > 0 && u.burnT > R.t && u.px != null) { const r = 46 * z; ctx.drawImage(glowSpr, rX(u.px) - r, rY(u.py) - 20 * z - r, r * 2, r * 2); }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
+  if (typeof elNightGlow === 'function') elNightGlow();      /* живой огонь ночью светится сам: завеса тьмы его не глушит */
 }
 
 /* ===================== Свои спрайты в духе набора: герои-маги, чудища края ===================== */
@@ -10169,6 +10170,13 @@ function elRowDraw(E, row, t) {                                                 
     if (fi >= 5 && nz !== 3) { ctx.fillStyle = ELP[Math.max(0, c - 3)]; ctx.fillRect(X0 + Math.round(cw * (0.12 + lean * 0.5 + (nz & 1) * 0.1)), Y0 - ch, Math.ceil(cw * 0.72), ch); }
     if (fi >= 9 && (nz & 1)) { ctx.fillStyle = ELP[Math.max(0, c - 6)]; ctx.fillRect(X0 + Math.round(cw * (0.28 + lean)), Y0 - ch * 2, Math.ceil(cw * 0.46), ch); }
     if (fi >= 13 && nz >= 5) { ctx.fillStyle = ELP[Math.max(0, c - 9)]; ctx.fillRect(X0 + Math.round(cw * (0.4 + lean * 1.5)), Y0 - ch * 3, Math.ceil(cw * 0.3), ch); } }
+}
+function elNightGlow() {                                                          // ночь: поверх завесы тьмы пламя добавляет свой свет — по клетке на язык
+  const E = EL; if (!E || !E.cnt || !G || E.B !== G.battle || !elOn()) return; const w = E.w, fire = E.fire;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let j = 0; j < E.cnt; j++) { const i = E.list[j], f = fire[i]; if (!f) continue; const x = i % w, y = (i / w) | 0, X0 = Math.round(rX(x * ELC)), Y0 = Math.round(rY(y * ELC)), cw = Math.round(rX((x + 1) * ELC)) - X0, ch = Math.round(rY((y + 1) * ELC)) - Y0;
+    ctx.fillStyle = f >= 9 ? 'rgb(64,34,9)' : f >= 5 ? 'rgb(48,23,6)' : 'rgb(26,10,3)'; ctx.fillRect(X0, Y0, cw, ch); }      /* мягко: бойцы в огне не должны выцветать до белого */
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 /* ===================== Герои на костях: кадры по фазам в трёх видах ===================== */
