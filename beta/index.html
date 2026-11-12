@@ -1195,7 +1195,7 @@ function hitE(e, d, by, src) {
       else if (e.t === 'shaman') L.gold += 6; else if (e.t === 'archer') { L.gold += 1; L.wood += 2; } else { L.gold += 1 + ((e.id * 7) % 3); if (e.t === 'gob' || e.id % 2) L.spear += 1; }
       if (e.carry) { G.res[e.carry.k] += e.carry.amt; r.stolen[e.carry.k] -= e.carry.amt; e.carry = null; }
       if (e.cap) freeCaptive(e); }
-    if (!taken) { if (!G.sk && typeof necroTownStep === 'function') necroTownStep(); G.corp.push({ x: e.x, y: e.y, t: e.t, alpha: !!e.alpha, own: !!(by && (by.und || by.hero === 'necro')), tm: G.t, sk: G.sk ? G.sk.id : 0 }); }
+    if (!taken) { if (!G.sk && typeof necroTownStep === 'function') necroTownStep(); G.corp.push({ x: e.x, y: e.y, t: e.t, alpha: !!e.alpha, face: e.face || 1, own: !!(by && (by.und || by.hero === 'necro')), tm: G.t, sk: G.sk ? G.sk.id : 0 }); }
     fx('dead', e.x, e.y, e.t); ev('kill', e);
   }
 }
@@ -6366,9 +6366,10 @@ function drawWar(t, z, vis) {
     const R = sb.type === 'bell' ? 560 : isNight() ? 200 : 340; g.strokeStyle = sb.type === 'bell' ? 'rgba(255,226,122,0.8)' : 'rgba(255,255,255,0.75)'; g.lineWidth = 2; g.setLineDash([8, 6]); g.beginPath(); g.arc(sx(sb.x), sy(sb.y), R * z, 0, 6.3); g.stroke(); g.setLineDash([]); g.fillStyle = sb.type === 'bell' ? 'rgba(255,226,122,0.06)' : 'rgba(255,255,255,0.05)'; g.beginPath(); g.arc(sx(sb.x), sy(sb.y), R * z, 0, 6.3); g.fill(); } }
   for (const f of G.fx) {
     const age = G.t - f.t;
-    if (f.k === 'arrow') { const k = clamp(age / 0.03, 0, 1), x = f.x + (f.a.x - f.x) * k, y = f.y + (f.a.y - f.y) * k, a = Math.atan2(f.a.y - f.y, f.a.x - f.x); g.strokeStyle = '#3d2a14'; g.lineWidth = 2 * z; g.beginPath(); g.moveTo(sx(x), sy(y)); g.lineTo(sx(x - Math.cos(a) * 12), sy(y - Math.sin(a) * 12)); g.stroke(); }
-    else if (f.k === 'dead') { const a = 1 - age / 0.5; g.globalAlpha = Math.max(0, a); g.fillStyle = '#3a2a4a'; for (let i = 0; i < 6; i++) { const an = i * 1.05; ci(g, sx(f.x + Math.cos(an) * (1 - a) * 22), sy(f.y - 8 + Math.sin(an) * (1 - a) * 16), 3 * z); } g.globalAlpha = 1; }
-    else if (f.k === 'grave') { const a = 1 - age / 0.5; g.globalAlpha = Math.max(0, a); g.strokeStyle = '#fff'; g.lineWidth = 3; const X = sx(f.x), Y = sy(f.y) - (16 + (1 - a) * 20) * z; g.beginPath(); g.moveTo(X, Y - 9); g.lineTo(X, Y + 9); g.moveTo(X - 6, Y - 3); g.lineTo(X + 6, Y - 3); g.stroke(); g.globalAlpha = 1; }
+    if (f.k === 'arrow') { const k = clamp(age / 0.03, 0, 1), d0 = Math.hypot(f.a.x - f.x, f.a.y - f.y) || 1, Hh = Math.min(34, d0 * 0.15), x = f.x + (f.a.x - f.x) * k, y = f.y + (f.a.y - f.y) * k - Math.sin(k * Math.PI) * Hh, a0 = Math.atan2(f.a.y - f.y, f.a.x - f.x), a = Math.atan2(Math.sin(a0) - Hh * Math.PI * Math.cos(k * Math.PI) / d0, Math.cos(a0));      /* стрела летит навесом, остриё по касательной */
+      g.strokeStyle = '#3d2a14'; g.lineWidth = 2 * z; g.beginPath(); g.moveTo(sx(x), sy(y)); g.lineTo(sx(x - Math.cos(a) * 12), sy(y - Math.sin(a) * 12)); g.stroke(); }
+    else if (f.k === 'dead') { const a = 1 - age / 0.22; if (a > 0) { g.globalAlpha = 0.5 * a; g.fillStyle = '#d2c4a2'; for (let i = 0; i < 6; i++) { const an = i * 1.05; ci(g, sx(f.x + Math.cos(an) * (1 - a) * 20), sy(f.y - 3 + Math.sin(an) * (1 - a) * 8 - (1 - a) * 7), (2.4 + (1 - a) * 2.6) * z); } g.globalAlpha = 1; } }      /* павший упал — клуб пыли у земли (было тёмное пятно на полсекунды игры) */
+    else if (f.k === 'grave') { const a = 1 - age / 0.5; if (a > 0) { const w = age * 40, X = sx(f.x) + Math.sin(w) * 3 * z, Y = sy(f.y) - (16 + (1 - a) * 22) * z; g.fillStyle = '#eef4ff'; g.globalAlpha = 0.85 * a; ci(g, X, Y, 3.2 * z); g.globalAlpha = 0.4 * a; ci(g, X - Math.sin(w - 0.6) * 2 * z, Y + 6 * z, 2.2 * z); ci(g, X - Math.sin(w - 1.2) * 2.5 * z, Y + 11 * z, 1.4 * z); g.globalAlpha = 1; } }      /* павший житель: светлый огонёк уходит вверх (раньше — белый крест; знаков веры в игре нет, п. 3.4.5) */
   }
   const bell = bellB();
   if (bell && G.al.bell && t - bellFx < 4) { const k = (Math.max(0, t - bellFx) % 1.3) / 1.3; g.strokeStyle = 'rgba(255,226,122,' + (0.8 * (1 - k)) + ')'; g.lineWidth = 3; g.beginPath(); g.arc(sx(bell.x), sy(bell.y - 50), (40 + k * 520) * z, 0, 6.3); g.stroke(); }
@@ -6424,6 +6425,7 @@ function enemyScale(e) { return SCALE5[e.t] ? SCALE5[e.t] * (e.alpha && e.t !== 
 function drawEnemyAt(e, X, Y, t, z) {
   const up = EN2[e.t] && EN2[e.t].wing ? 34 * z : e.t === 'harpy' ? 16 * z : 0; if (up) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; el(ctx, X, Y, 16 * z * enemyScale(e) * 0.6, 5 * z * enemyScale(e) * 0.6); Y -= up + Math.sin(t * 4 + e.id) * 3 * z; }
   const g = ctx, U = !!e.und, big = e.t === 'ogre' || enemyScale(e) >= 1.7, hit = e.hit && G.t - e.hit < 0.03 ? 5 : 0;
+  if (!U && typeof kbWarmDead === 'function') kbWarmDead(e.t);
   if (U) { g.fillStyle = 'rgba(90,255,190,' + (0.16 + Math.sin(t * 4 + e.id) * 0.05) + ')'; el(g, X, Y - 2 * z, (big ? 26 : 15) * z, (big ? 12 : 7) * z); }
   if (!(tsOk() && tsEnemy(e, X, Y, z, t, hit)) && !peDraw(e, X, Y, z, t, hit)) { g.save(); g.translate(X, Y); const sc = z * 1.2 * enemyScale(e); g.scale(sc * (e.face || 1), sc); enemyShape(g, e, hit, e.walk || 0); g.restore(); }
   if (e.frz > G.t) { g.fillStyle = 'rgba(150,220,255,0.45)'; el(g, X, Y - 12 * z, (big ? 26 : 13) * z, (big ? 34 : 18) * z); g.strokeStyle = 'rgba(230,250,255,0.9)'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(X, Y - 12 * z, (big ? 26 : 13) * z, (big ? 34 : 18) * z, 0, 0, 6.3); g.stroke(); }
@@ -6435,6 +6437,8 @@ function beastCanvas(type, und) { const c = document.createElement('canvas'); c.
   const sc = SCALE5[type] ? Math.min(2.9, 3.4 / SCALE5[type]) * (type === 'drake' || type === 'dragon' || type === 'ancient' ? 0.62 : type === 'bear' || type === 'gwolf' ? 0.8 : 1) : type === 'ogre' ? 2.3 : type === 'boar' || type === 'wolf' || type === 'spider' || type === 'weaver' ? 3.4 : 2.9; g.translate(type === 'wolf' || type === 'boar' ? 50 : 54, 92); g.scale(sc, sc); enemyShape(g, e, 0, 0.6); return c; }
 function corpseDraw(c, X, Y, z, a) {                           // тело — тот же облик, что у живого: лежит на боку, темнее, не шевелится
   const fl = ((c.x * 7 + c.y * 3) | 0) % 2 ? 1 : -1, e = { t: c.t, id: (c.x * 13 + c.y * 7) | 0, face: fl, walk: 0, alpha: c.alpha, und: false }, g = ctx;
+  const fc = c.face || fl, kbU = { k: c.t, hp: 0, dieT: 0, face: fc, id: e.id }, kbT = (G.t - c.tm) * 9;      /* у зверей с кадрами из Blender павший валится на бок и лежит (0,04 ч игры ≈ 0,4 с набега) */
+  if (typeof monKbAnim === 'function' && typeof tsOk === 'function' && tsOk() && MSZ[c.t] && monKbAnim(kbU, kbT)) { g.globalAlpha = a * 0.85; const ok2 = tsMonDraw(kbU, X, Y + 2 * z, TSS * z * 0.95, kbT); g.globalAlpha = 1; if (ok2) return true; }
   g.globalAlpha = a; g.fillStyle = 'rgba(16,20,30,0.3)'; g.beginPath(); g.ellipse(X, Y, 15 * z, 4.5 * z, 0, 0, 6.3); g.fill();      // тёмное пятно под телом вместо ctx.filter (тот в разы дороже)
   g.save(); g.globalAlpha = a * 0.8; g.translate(X, Y - 3 * z); g.rotate(fl * 1.5);
   let ok = false; try { ok = (tsOk() && tsEnemy(e, 0, 6 * z, z, 0, 0)) || peDraw(e, 0, 6 * z, z, 0, 0); if (!ok) { const sc = z * 1.2 * enemyScale(e); g.scale(sc * fl, sc); enemyShape(g, e, 0, 0); ok = true; } } catch (er) { ok = false; }
@@ -6444,7 +6448,7 @@ function drawCorpses(z, vis) {
   const g = ctx;
   const nec = typeof townNecro === 'function' && !!townNecro();
   for (const c of G.corp) { if (!vis(c.x, c.y)) continue; const X = sx(c.x), Y = sy(c.y), a = G.sk && c.sk === G.sk.id ? 1 : clamp(1 - (G.t - c.tm) / 4, 0, 1), s = (c.t === 'ogre' ? 15 : 8) * z;
-    g.fillStyle = 'rgba(60,20,20,' + (0.3 * a) + ')'; el(g, X, Y, s * 1.4, s * 0.6);
+    g.fillStyle = 'rgba(16,20,30,' + (0.22 * a) + ')'; el(g, X, Y, s * 1.4, s * 0.6);      /* тень под телом — нейтральная, без красного */
     if (!corpseDraw(c, X, Y, z, a)) { g.fillStyle = (c.t === 'wolf' ? 'rgba(90,90,98,' : c.t === 'boar' ? 'rgba(96,66,46,' : c.t === 'ogre' ? 'rgba(125,107,60,' : 'rgba(63,120,58,') + (0.85 * a) + ')'; el(g, X, Y - 2 * z, s, s * 0.45); }
     if (nec || c.own) { g.strokeStyle = 'rgba(90,255,190,' + (0.7 * a) + ')'; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.ellipse(X, Y - 1 * z, s * 1.5, s * 0.75, 0, 0, 6.3); g.stroke(); g.setLineDash([]); } }
 }
@@ -8319,8 +8323,12 @@ function rtDrawFx(B, f, t) {
 function rtDrawPr(B, p, t) {
   const z = RTV.z, X = rX(p.x), Y = rY(p.y), tg = p.tid > 0 ? btU(B, p.tid) : null, tx = tg ? tg.px : p.tx, ty = tg ? tg.py - 12 : p.ty, a = Math.atan2(ty - p.y, tx - p.x);
   const noEmit = typeof CINE !== 'undefined' && CINE.ghost;      // повтор в кино: новых частиц не плодим — призрак играет записанные (Kimi 039, п. 9)
-  if (p.k === 'arrow' && TS.ready && TSD.arch_idle) { ctx.save(); ctx.translate(X, Y); ctx.rotate(a); ctx.strokeStyle = '#6b4a3a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-10 * z, 0); ctx.lineTo(8 * z, 0); ctx.stroke(); ctx.fillStyle = '#dfe6ee'; ctx.fillRect(7 * z, -1.5, 4 * z, 3); ctx.restore();
-    ctx.globalAlpha = 0.22; ctx.strokeStyle = '#eef3f8'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X - Math.cos(a) * 15 * z, Y - Math.sin(a) * 15 * z); ctx.lineTo(X, Y); ctx.stroke(); ctx.globalAlpha = 1;      // штрих полёта за стрелой (Kimi 039, п. 9)
+  if (p.k === 'arrow' && TS.ready && TSD.arch_idle) {
+    if (p.x0 == null) { p.x0 = p.x; p.y0 = p.y; }      /* стрела летит навесом: дуга по пройденной доле пути, остриё — по касательной, тень бежит по земле */
+    const d0 = Math.hypot(tx - p.x0, ty - p.y0) || 1, q = clamp(1 - Math.hypot(tx - p.x, ty - p.y) / d0, 0, 1), Hh = Math.min(44, d0 * 0.17), h = Math.sin(q * Math.PI) * Hh, a2 = Math.atan2(Math.sin(a) - Hh * Math.PI * Math.cos(q * Math.PI) / d0, Math.cos(a)), Ya = Y - h * z;
+    if (h > 3) { ctx.fillStyle = 'rgba(16,20,30,0.2)'; ctx.beginPath(); ctx.ellipse(X, Y + 14 * z, 6 * z, 1.8 * z, a * 0.4, 0, 6.3); ctx.fill(); }
+    ctx.save(); ctx.translate(X, Ya); ctx.rotate(a2); ctx.strokeStyle = '#6b4a3a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-10 * z, 0); ctx.lineTo(8 * z, 0); ctx.stroke(); ctx.fillStyle = '#dfe6ee'; ctx.fillRect(7 * z, -1.5, 4 * z, 3); ctx.restore();
+    ctx.globalAlpha = 0.22; ctx.strokeStyle = '#eef3f8'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X - Math.cos(a2) * 15 * z, Ya - Math.sin(a2) * 15 * z); ctx.lineTo(X, Ya); ctx.stroke(); ctx.globalAlpha = 1;      // штрих полёта за стрелой (Kimi 039, п. 9)
     return; }
   if (p.k === 'fire') { const D = TSD.fx_fire_01; for (let i = 3; i >= 1; i--) { ctx.globalAlpha = 0.16 * (4 - i); ctx.fillStyle = '#ff8a2a'; ci(ctx, X - Math.cos(a) * i * 9 * z, Y - Math.sin(a) * i * 9 * z, (11 - i * 2) * z); } ctx.globalAlpha = 0.3; ctx.fillStyle = '#ffc04a'; ci(ctx, X, Y, 15 * z); ctx.globalAlpha = 1; /* хвост и свечение: шар видно и на телефоне */
     if (TS.ready && D) { if (!noEmit && typeof bstEmit === 'function' && Math.random() < 0.35) bstEmit({ k: 'ember', x: p.x, y: p.y, h: 10, vx: -Math.cos(a) * 26, vy: -Math.sin(a) * 26, vh: 30, a: 0, life: 0.35, r0: 1.2, r1: 0.4, pal: BST_PAL.red.fire }); tsBlit(tsCanvas('fx_fire_01'), D, Math.floor(t * 14), X, Y + 12 * z, TSS * z * 3, false, 0); return; } ctx.fillStyle = '#ff9a3c'; ci(ctx, X, Y, 6 * z); return; }
@@ -8623,15 +8631,17 @@ function tsMonDraw(u, X, Y, s, t) {
   const F = monFrames(k, an, !!u.und), fr = kbA ? Math.min(F.D.n - 1, Math.floor(kbA.ph * F.D.n)) : an === 'atk' ? (u.an === 'atk' && typeof rtAtkFrame === 'function' ? rtAtkFrame(u, F.D.n) : Math.min(F.D.n - 1, Math.floor((u.at || 0) * (F.D.n > 3 ? F.D.n / 0.42 : 8)))) : Math.floor(t * (an === 'run' ? 9 : 3) + (u.id || 0));
   tsBlit(F.cv, F.D, fr, X, Y, s, (u.face || 1) < 0, 0); return true;
 }
-function monKbAnim(u, t) {          /* нокдаун зверя -> {an, ph}; null — кадров нет или нокдауна нет: прежний облик и прежний наклон KBQ */
+function monKbAnim(u, t) {          /* нокдаун зверя -> {an, ph}; null — кадров нет, полоса ещё грузится или нокдауна нет: прежний облик и прежний наклон KBQ */
   if (!window.__BLEND || !u.k || u.ba) return null;
-  const S = window.__BLEND['m_' + u.k + (u.und && !/^u_/.test(u.k) ? '_u' : '')]; if (!S) return null;      /* как monFrames: поднятые — m_*_u */
-  if (u.kb && u.kb.down && S.fall && ((u.kb.z || 0) > 0.5 || Math.hypot(u.kb.vx || 0, u.kb.vy || 0) > 12)) return { an: 'fall', ph: Math.min(1, (u.kb.t || 0) / 0.45) };      /* отброшен и летит/падает — кувырок */
-  if (u.hp <= 0 && (S.dead || S.lie)) { const dd = u.dieT != null ? t - u.dieT : 9; if (dd >= 0 && dd < 0.36 && S.fall) return { an: 'fall', ph: dd / 0.36 }; return { an: S.dead ? 'dead' : 'lie', ph: 0 }; }                       /* павший и труп лежат неподвижно */
-  if (u.kb && u.kb.down && S.lie) return { an: 'lie', ph: (t * 0.5 + (u.id || 0) * 0.37) % 1 };      /* сбит и оглушён — лежит, дышит */
-  if (u.hp > 0 && u.upT != null && t - u.upT < 0.4 && S.getup) return { an: 'getup', ph: (t - u.upT) / 0.4 };      /* встаёт 0.4 с, как в bstKb */
-  return null;
+  const kind = 'm_' + u.k + (u.und && !/^u_/.test(u.k) ? '_u' : ''), S = window.__BLEND[kind]; if (!S) return null;      /* как monFrames: поднятые — m_*_u */
+  let r = null;
+  if (u.kb && u.kb.down && S.fall && ((u.kb.z || 0) > 0.5 || Math.hypot(u.kb.vx || 0, u.kb.vy || 0) > 12)) r = { an: 'fall', ph: Math.min(1, (u.kb.t || 0) / 0.45) };      /* отброшен и летит/падает — кувырок */
+  else if (u.hp <= 0 && (S.dead || S.lie)) { const dd = u.dieT != null ? t - u.dieT : 9; r = dd >= 0 && dd < 0.36 && S.fall ? { an: 'fall', ph: dd / 0.36 } : { an: S.dead ? 'dead' : 'lie', ph: 0 }; }      /* павший: валится 0,36 с и лежит неподвижно */
+  else if (u.kb && u.kb.down && S.lie) r = { an: 'lie', ph: (t * 0.5 + (u.id || 0) * 0.37) % 1 };      /* сбит и оглушён — лежит, дышит */
+  else if (u.hp > 0 && u.upT != null && t - u.upT < 0.4 && S.getup) r = { an: 'getup', ph: (t - u.upT) / 0.4 };      /* встаёт 0.4 с, как в bstKb */
+  return r && blendFrames(kind, r.an) ? r : null;      /* полоса ещё в пути (медленная сеть) — пока прежний наклон, облик не подменяем */
 }
+function kbWarmDead(k) { const S = window.__BLEND && window.__BLEND['m_' + k]; if (S && S.dead) { blendFrames('m_' + k, 'dead'); if (S.fall) blendFrames('m_' + k, 'fall'); } }      /* город: зверь на виду — кадры падения и павшего грузятся заранее */
 DBGX_ART = { heroFrames: heroFrames, monFrames: monFrames, MSZ: MSZ };
 
 /* ===================== Боссы края в духе набора: восемнадцать обликов и вещи их загадок ===================== */
