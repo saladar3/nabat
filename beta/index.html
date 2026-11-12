@@ -997,7 +997,7 @@ function bstFire(B, u, dt) {
   const Md = btM(u), dps = (Md.breath ? Md.breath[1] : 26) * RTK * 0.55;
   for (const q of B.u) { if (q.side === u.side || q.hp <= 0 || q.out) continue; const dx = q.px - F.x, dy = q.py - F.y, d = Math.hypot(dx, dy); if (d > F.len + q.r) continue; const da = Math.abs(bstAng(Math.atan2(dy, dx) - F.a)); if (da > 0.26 + 18 / Math.max(30, d)) continue;
     q.s.burn = Math.max(q.s.burn || 0, 2.5); q.fireT = R.t; rtHurt(B, q, dps * dt * (q.s.ward ? 0.45 : 1), u, { dot: 1, fire: 1, magic: 1 }); }
-  F.tick += dt; if (F.tick > 0.09) { F.tick = 0; R.dec = R.dec || []; const L = F.len * (0.55 + Math.random() * 0.45); R.dec.push({ k: 'scorch', x: F.x + Math.cos(F.a) * L, y: F.y + Math.sin(F.a) * L, r: 16 + L * 0.08, t: R.t, rot: Math.random() * 6 }); if (R.dec.length > 260) R.dec.splice(0, 30); }
+  F.tick += dt; if (F.tick > 0.09) { F.tick = 0; R.dec = R.dec || []; const L = F.len * (0.55 + Math.random() * 0.45); R.dec.push({ k: 'scorch', x: F.x + Math.cos(F.a) * L, y: F.y + Math.sin(F.a) * L, r: 16 + L * 0.08, t: R.t, rot: Math.random() * 6, br: 1 }); if (R.dec.length > 260) R.dec.splice(0, 30); }
 }
 /* удар по существу: обида на обидчика; сильный удар — дракон дёргается (спереди или сзади), очень сильный — пятится */
 function bstHurt(B, t, d, a) {
@@ -4350,7 +4350,7 @@ function rtParry(B, u, a) {                                  // точно от�
   if (a && a.hp > 0) { rtHurt(B, a, Math.round(u.d * 3 * (typeof heroArtMul === 'function' ? heroArtMul(B, u, a, {}) : 1)), u, {}); a.s.stun = 1.4; }
   B.parries = (B.parries || 0) + 1;
 }
-function rtBoom(B, x, y, r, from, o) { const a = btU(B, from); rtFx(B, { k: 'boom', x: x, y: y, r: r }); for (const u of B.u) if (u.hp > 0 && !u.out && a && u.side !== a.side && Math.hypot(u.px - x, u.py - y) < r + u.r * 0.5) rtStrikeRes(B, a, u, rtDmg(B, a, u, o && o.mul || 1, { rngd: true, magic: true }), { magic: true, fire: o && o.fire }); }
+function rtBoom(B, x, y, r, from, o) { const a = btU(B, from); rtFx(B, { k: 'boom', x: x, y: y, r: r, fire: o && o.fire ? 1 : 0 }); for (const u of B.u) if (u.hp > 0 && !u.out && a && u.side !== a.side && Math.hypot(u.px - x, u.py - y) < r + u.r * 0.5) rtStrikeRes(B, a, u, rtDmg(B, a, u, o && o.mul || 1, { rngd: true, magic: true }), { magic: true, fire: o && o.fire }); }
 /* ---------- герой под рукой игрока ---------- */
 function rtHeroCtl(B, u, dt) {
   const c = B.rt.cmd;
@@ -4484,7 +4484,7 @@ function rtAutoAll(B, secs) {
   while (!B.over && g++ < lim) rtStep(B, RTDT);
   if (!B.over) rtEnd(B, 'retreat'); return B.over;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtBoom, rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
 
 /* ===================== Жесты: что нарисовал палец (без DOM) ===================== */
 /* По росчерку на экране — вид жеста: касание, удержание, линия, круг, дуга, зигзаг, спираль, галка.
@@ -5947,6 +5947,58 @@ V2.hourly.push(dailyHourly);
 function townScore() { const L = G.land; return Math.round(G.people.length * 10 + G.day * 2 + (L && L.boss ? L.boss.done.length * 50 : 0) + (G.tales || 0) * 5 + (G.guild ? G.guild.lv * 15 : 0) + (G.hallLv || 1) * 20 + (G.anc ? Object.values(G.anc).filter(a => a.slain).length * 100 : 0)); }
 function scoreSubmit() { const s = townScore(); if (!G.daily) return s; G.daily.best = Math.max(G.daily.best || 0, s); if (typeof lbSubmit === 'function') lbSubmit(s); return s; }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { DTASK, dailyFix, dailyNew, dailyAdd, townScore, scoreSubmit });
+
+/* ---------- Стихии, М1: живой огонь (план — docs-stihii.md) ----------
+   Трава горит по клеткам (8 точек поля): пламя разбегается по зоне огня, ест траву, выгорает и оставляет гарь; выгоревшее
+   второй раз ярко не горит — только тлеет. Вода и топь не горят, на снегу и камне травы мало.
+   Пока это облик боя: урон по-прежнему считают зоны огня (rtZoneFire), на исход сетка не влияет. Состояние живёт вне боя
+   (в сохранение не попадает), случай — свой (игровой Math.random не трогаем: бои в проверках идут как шли). */
+const ELC = 8, ELHZ = 20, ELMAX = 6000;
+let EL = null;
+function elRnd(E) { let s = E.seed; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; E.seed = (s >>> 0) || 1; return E.seed / 4294967296; }
+function elInit(B, snow) {
+  const R = B.rt, w = Math.ceil(RTW / ELC), h = Math.ceil(RTH / ELC), n = w * h;
+  const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
+    t: R.t, acc: 0, tick: 0, bursts: [], seen: new WeakSet(), seed: ((((B.tid || 1) + 7) * 2654435761) ^ 0x9e3779b9) >>> 0 || 1, wind: 0, dirty: 0, zn: 0, snow: !!snow };
+  E.wind = elRnd(E) * 2 - 1;                                                      // ветер боя: куда клонит языки и куда чаще лижет кромку
+  const base = snow ? 6 : B.tr === 'volcano' ? 4 : B.tr === 'mount' ? 10 : B.tr === 'steppe' ? 30 : 24;      // запас травы — сколько тиков клетка кормит огонь
+  for (let i = 0; i < n; i++) E.fuel[i] = base + ((elRnd(E) * base * 0.5) | 0);
+  const wipe = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) E.fuel[y * w + x] = 0; };
+  for (const z of R.zn) if (z.k === 'swamp' || z.k === 'water' || z.k === 'lava') { const x1 = ((z.x + z.w) / ELC) | 0, y1 = ((z.y + z.h) / ELC) | 0; for (let y = (z.y / ELC) | 0; y <= y1; y++) for (let x = (z.x / ELC) | 0; x <= x1; x++) wipe(x, y); }      // вода и топь не горят
+  for (const o of R.ob) if (o.k === 'rock' || o.k === 'ice') { const r = Math.ceil(o.r / ELC), cx = (o.x / ELC) | 0, cy = (o.y / ELC) | 0; for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r) wipe(cx + x, cy + y); }      // камень и лёд — тоже
+  EL = E; return E;
+}
+function elGet(B, snow) { if (!B || !B.rt) return null; if (!EL || EL.B !== B || EL.w !== Math.ceil(RTW / ELC) || EL.h !== Math.ceil(RTH / ELC)) elInit(B, snow); return EL; }
+function elHash(i) { let v = (i * 2654435761) >>> 0; v ^= v >>> 15; v = (v * 2246822519) >>> 0; v ^= v >>> 13; return (v & 0xffff) / 65536; }      // постоянный «шум» клетки: кромка пятна, сила пламени
+function elLight(E, i, f) { if (E.fire[i] === 0) { if (E.cnt >= ELMAX) return false; E.list[E.cnt++] = i; } if (f > E.fire[i]) E.fire[i] = f; return true; }
+function elPatch(E, cx, cy, rx, ry, st) {                                         // пятно огня — овал с рваной кромкой (в клетках): метит клетки «в огне» и разжигает их
+  const w = E.w, h = E.h, fire = E.fire, fuel = E.fuel, zone = E.zone, x0 = Math.max(0, Math.floor(cx - rx - 1)), x1 = Math.min(w - 1, Math.ceil(cx + rx + 1)), y0 = Math.max(0, Math.floor(cy - ry - 1)), y1 = Math.min(h - 1, Math.ceil(cy + ry + 1));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * w + x, ex = (x + 0.5 - cx) / rx, ey = (y + 0.5 - cy) / ry; if (ex * ex + ey * ey > 0.8 + elHash(i) * 0.4) continue; zone[i] = st;
+    if (fire[i] === 0 && elRnd(E) < (fuel[i] > 0 ? 0.5 : 0.09)) elLight(E, i, 2 + ((elRnd(E) * (fuel[i] > 0 ? 5 : 3)) | 0)); }
+}
+function elZoneOn(z) { return z.k === 'fire' && !z.dead && z.t1 > 0 && z.t1 < 1e8; }      // вечные костры — отдельный облик, сетку не жгут
+function elTick(E) {
+  const R = E.B.rt, w = E.w, h = E.h, fire = E.fire, fuel = E.fuel, ash = E.ash, zone = E.zone, st = ++E.tick; E.zn = 0;
+  for (const z of R.zn) if (elZoneOn(z)) { E.zn++; elPatch(E, (z.x + z.w / 2) / ELC, (z.y + z.h / 2) / ELC, z.w / ELC * 0.56 + 0.5, z.h / ELC * 0.56 + 0.5, st); }      // 1. зона огня: в её пятне горит всё — трава ярко, голая земля слабо
+  if (R.fx) for (const f of R.fx) if (f.k === 'boom' && f.fire && !E.seen.has(f)) { E.seen.add(f); E.bursts.push({ x: f.x / ELC, y: f.y / ELC, r: Math.max(2, f.r * 0.8 / ELC), n: 11 }); }      // взрыв огненного шара: трава вспыхивает и за полсекунды выгорает
+  if (R.dec) for (const d of R.dec) if (d.br && !E.seen.has(d)) { E.seen.add(d); E.bursts.push({ x: d.x / ELC, y: d.y / ELC, r: Math.max(2, d.r * 1.15 / ELC), n: 14 }); }      // струя дракона: горит там, куда она легла
+  if (E.bursts.length) { let q = 0; for (const b of E.bursts) { elPatch(E, b.x, b.y, b.r, b.r * 0.8, st); if (--b.n > 0) E.bursts[q++] = b; } E.bursts.length = q; if (E.bursts.length > 40) E.bursts.splice(0, E.bursts.length - 40); }
+  let k = 0;
+  for (let j = 0; j < E.cnt; j++) { const i = E.list[j]; let f = fire[i]; if (f === 0) continue;      // 2. горящие клетки: едят траву, разгораются, лижут кромку; вне зоны гаснут
+    if (ash[i] < 250) { ash[i] = Math.min(250, ash[i] + (fuel[i] > 0 ? 14 : 5)); E.dirty = 1; }
+    if (zone[i] === st) {
+      if (fuel[i] > 0) { fuel[i]--; if (f < 8 + ((elHash(i + 77) * 8) | 0)) f++; } else if (f > 4) f--; else if (elRnd(E) < 0.4) f--;      // трава кончилась — пламя оседает, гаснет и вспыхивает снова, пока зона жива: над гарью пляшут низкие языки
+      if (f >= 7 && elRnd(E) < 0.3) { const dx = ((elRnd(E) * 3) | 0) - 1 + (elRnd(E) < Math.abs(E.wind) * 0.5 ? (E.wind > 0 ? 1 : -1) : 0), dy = ((elRnd(E) * 3) | 0) - 1, x = i % w + dx, y = ((i / w) | 0) + dy;
+        if (x >= 0 && y >= 0 && x < w && y < h) { const q = y * w + x; if (fire[q] === 0 && fuel[q] > 0 && zone[q] !== st) elLight(E, q, 3 + ((elRnd(E) * 3) | 0)); } }      // язык лизнул траву за кромкой
+    } else { f = f > 2 ? f - 2 : 0; if (fuel[i] > 2) fuel[i] -= 2; else fuel[i] = 0; }      // вне зоны огню не жить: опалил траву и погас (урона там нет — и пламени быть не должно)
+    fire[i] = f; if (f > 0) E.list[k++] = i; }
+  E.cnt = k;
+}
+function elStep(B, snow) {                                                       // зовёт отрисовка боя; шаг — по времени боя: пауза и замедление действуют сами
+  const E = elGet(B, snow); if (!E) return null; const R = B.rt; let dt = R.t - E.t; E.t = R.t; if (!(dt > 0)) dt = 0; else if (dt > 3) dt = 3;
+  E.acc += dt * ELHZ; let n = 0; while (E.acc >= 1 && n < 60) { elTick(E); E.acc -= 1; n++; } if (E.acc > 1) E.acc = 0; return E;      /* обычно 0–1 тик за кадр; после простоя догоняет до 3 с */
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { ELC, ELHZ, elInit, elGet, elTick, elStep, elLight, elZoneOn, elState: () => EL });
 
 /* ===================== Отрисовка города ===================== */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -8344,9 +8396,10 @@ function renderRt(t) {
   if (typeof artWarmBattle === 'function') { if (RTV.warmB !== B) { RTV.warmB = B; ARTQ.length = 0; artWarmBattle(B); } if (ARTQ.length) artWarmTick(4); }
   ctx.fillStyle = '#16261a'; ctx.fillRect(0, 0, W, H);
   const z = RTV.z, bg = rtBgBuild(B); tsSmooth(z); ctx.drawImage(bg, RTV.ox, RTV.oy, RTW * z, RTH * z); ctx.imageSmoothingEnabled = true;
+  const ELs = typeof elStep === 'function' && elOn() ? elStep(B0, !(EL && EL.B === B0) && terrPal() === 'winter') : null; if (ELs) elGround(ELs, z);      /* стихии, М1: живой огонь — гарь под ногами (считается по настоящему бою, а не по записи для кино) */
   // огонь и туман на земле, ловушки, тела
   for (const zn of R.zn) { if (zn.k !== 'fire') continue;
-    const D = TSD.fx_fire_03; for (let i = 0; i < 4; i++) { const x = zn.x + zn.w * (0.25 + (i % 2) * 0.5), y = zn.y + zn.h * (0.3 + (i >> 1) * 0.45); if (TS.ready && D) tsBlit(tsCanvas('fx_fire_03'), D, Math.floor(t * 12 + i * 3), rX(x), rY(y), TSS * z * 1.8, false, 0); else { ctx.fillStyle = '#ff7a1a'; ci(ctx, rX(x), rY(y), 8 * z); } }
+    const D = TSD.fx_fire_03; if (!(ELs && elZoneOn(zn))) for (let i = 0; i < 4; i++) { const x = zn.x + zn.w * (0.25 + (i % 2) * 0.5), y = zn.y + zn.h * (0.3 + (i >> 1) * 0.45); if (TS.ready && D) tsBlit(tsCanvas('fx_fire_03'), D, Math.floor(t * 12 + i * 3), rX(x), rY(y), TSS * z * 1.8, false, 0); else { ctx.fillStyle = '#ff7a1a'; ci(ctx, rX(x), rY(y), 8 * z); } }
     // кострище (Kimi 030, п. 4): днём — тёплый жар на траве из кэшированного glowSpr (ночью ореол даёт rtNight), дым и искры — в существующий кап частиц
     const fcx = zn.x + zn.w / 2, fcy = zn.y + zn.h / 2, noEmit = typeof CINE !== 'undefined' && CINE.ghost;      // повтор в кино: частицы призрака — из записи, новые не плодим
     if (!B.night) { if (!glowSpr) mkLight(); const gr = Math.max(zn.w, zn.h) * z * 0.55 * (1 + Math.sin(t * 6.4 + zn.x) * 0.07); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.2; ctx.drawImage(glowSpr, rX(fcx) - gr, rY(fcy) - gr * 0.62, gr * 2, gr * 1.24); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
@@ -8363,7 +8416,8 @@ function renderRt(t) {
   for (const T0 of R.tele) rtDrawTele(B, T0);
   // бойцы и деревья — по глубине
   const list = []; for (const ob of R.ob) list.push({ y: ob.y, ob: ob }); for (const u of B.u) { if (u.out && !u.flee) continue; if (u.px == null) continue; if (u.reform != null) continue; list.push({ y: u.py, u: u }); }
-  list.sort((a, b) => a.y - b.y); for (const it of list) { if (it.ob) rtDrawOb(B, it.ob, t); else rtDrawUnit(B, it.u, t); }
+  if (ELs && ELs.cnt) elRows(ELs, list);      /* пламя — по строкам клеток, в общем порядке глубины */
+  list.sort((a, b) => a.y - b.y); for (const it of list) { if (it.ob) rtDrawOb(B, it.ob, t); else if (it.el != null) elRowDraw(ELs, it.el, t); else rtDrawUnit(B, it.u, t); }
   if (typeof bstFrameTick === 'function') { bstFrameTick(B); bstEvents(B, z); bstPartDraw(z); }
   for (const p of R.pr) rtDrawPr(B, p, t);
   for (const f of R.fx || []) rtDrawFx(B, f, t);
@@ -10084,6 +10138,39 @@ function cinePanelsDraw(B) {
   ctx.restore();
 }
 
+/* ---------- Стихии, М1: живой огонь на поле боя — отрисовка (расчёт — 1z_elems.js) ----------
+   Гарь — маленькая картинка «клетка = точка», растянутая без сглаживания под бойцами. Пламя — по строкам клеток в общем
+   порядке глубины: боец перед огнём закрывает его, огонь перед бойцом — его ноги. Выключатель — меню паузы, «Живой огонь». */
+const ELP = ['#5c160b', '#7a1e0e', '#a52a12', '#d8431a', '#ee5f1c', '#ff7a1e', '#ff931f', '#ffab25', '#ffc531', '#ffd84f', '#ffe678', '#fff0a0', '#fff6c4'];
+const ELV = { cv: null, g: null, img: null, B: null, any: false, head: null, nxt: null };
+function elOn() { return !(typeof SV !== 'undefined' && SV && SV.set && SV.set.elems === 0); }
+function elGround(E, z) {                                                         // гарь под ногами: копится, пока клетка горит, и остаётся до конца боя
+  if (!ELV.cv || ELV.cv.width !== E.w || ELV.cv.height !== E.h || ELV.B !== E.B) { ELV.cv = document.createElement('canvas'); ELV.cv.width = E.w; ELV.cv.height = E.h; ELV.g = ELV.cv.getContext('2d'); ELV.img = ELV.g.createImageData(E.w, E.h); ELV.B = E.B; ELV.any = false; E.dirty = 1; }
+  if (E.dirty) { const d = ELV.img.data, a = E.ash, n = E.n; let any = false;
+    for (let i = 0; i < n; i++) { const v = a[i], o = i * 4; if (v) { any = true; d[o] = 30; d[o + 1] = 22; d[o + 2] = 16; d[o + 3] = (v * (0.5 + (((i * 2654435761) >>> 28) & 15) / 60)) | 0; } else d[o + 3] = 0; }
+    ELV.g.putImageData(ELV.img, 0, 0); ELV.any = any; E.dirty = 0; }
+  if (!ELV.any) return;
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(ELV.cv, RTV.ox, RTV.oy, E.w * ELC * z, E.h * ELC * z); ctx.imageSmoothingEnabled = true;
+}
+function elRows(E, list) {                                                        // строки с огнём — в общий список глубины
+  const h = E.h; if (!ELV.head || ELV.head.length !== h) { ELV.head = new Int32Array(h); ELV.nxt = new Int32Array(ELMAX); }
+  ELV.head.fill(-1); for (let j = 0; j < E.cnt; j++) { const y = (E.list[j] / E.w) | 0; ELV.nxt[j] = ELV.head[y]; ELV.head[y] = j; }
+  for (let y = 0; y < h; y++) if (ELV.head[y] >= 0) list.push({ y: (y + 1) * ELC - 2, el: y });
+  if (!(typeof CINE !== 'undefined' && CINE.ghost) && typeof bstEmit === 'function' && Math.random() < Math.min(0.22, E.cnt / 900)) {      /* дым и искры — оттуда, где сейчас горит (в повторе кино новых частиц не плодим) */
+    const i = E.list[(Math.random() * E.cnt) | 0], f = E.fire[i], x = (i % E.w + 0.5) * ELC, y = (((i / E.w) | 0) + 0.5) * ELC;
+    if (f >= 6) bstEmit({ k: 'smoke', x: x, y: y, h: 16, vx: E.wind * 22 + (Math.random() - 0.5) * 10, vy: 0, vh: 20 + Math.random() * 14, a: 0, life: 1.1 + Math.random() * 0.8, r0: 2, r1: 8 + Math.random() * 6, col: '#5e5050', al: 0.42 });
+    else if (typeof BST_PAL !== 'undefined') bstEmit({ k: 'ember', x: x, y: y, h: 6, vx: E.wind * 16 + (Math.random() - 0.5) * 18, vy: -4, vh: 34 + Math.random() * 40, a: 0, life: 0.5 + Math.random() * 0.6, r0: 1.3, r1: 0.6, pal: BST_PAL.red.fire }); }
+}
+function elRowDraw(E, row, t) {                                                   // пламя строки: жаркое основание и остывающие языки над ним
+  const w = E.w, fire = E.fire, ft = Math.floor(t * 14), Y0 = Math.round(rY(row * ELC)), ch = Math.round(rY((row + 1) * ELC)) - Y0, lean = E.wind * 0.3;
+  for (let j = ELV.head[row]; j >= 0; j = ELV.nxt[j]) { const i = E.list[j], f = fire[i]; if (!f) continue;
+    const x = i % w, X0 = Math.round(rX(x * ELC)), cw = Math.round(rX((x + 1) * ELC)) - X0, nz = (((i * 73) ^ (ft * 151)) + (i + ft) * 29 >>> 0) % 7, fi = Math.max(1, Math.min(15, f + (nz % 3) - 1)), c = Math.min(12, fi - 1);
+    ctx.fillStyle = ELP[c]; ctx.fillRect(X0, Y0, cw, ch);
+    if (fi >= 5 && nz !== 3) { ctx.fillStyle = ELP[Math.max(0, c - 3)]; ctx.fillRect(X0 + Math.round(cw * (0.12 + lean * 0.5 + (nz & 1) * 0.1)), Y0 - ch, Math.ceil(cw * 0.72), ch); }
+    if (fi >= 9 && (nz & 1)) { ctx.fillStyle = ELP[Math.max(0, c - 6)]; ctx.fillRect(X0 + Math.round(cw * (0.28 + lean)), Y0 - ch * 2, Math.ceil(cw * 0.46), ch); }
+    if (fi >= 13 && nz >= 5) { ctx.fillStyle = ELP[Math.max(0, c - 9)]; ctx.fillRect(X0 + Math.round(cw * (0.4 + lean * 1.5)), Y0 - ch * 3, Math.ceil(cw * 0.3), ch); } }
+}
+
 /* ===================== Герои на костях: кадры по фазам в трёх видах ===================== */
 /* Атласы героев лежат в window.__BEAST под ключами hwar, hmage, hnecro (тот же формат, что у Алого дракона: виды F/S/B, действия, кадры, опорные точки).
    Что играть — по состоянию бойца: покой, бег, серия из трёх ударов, умение, удержание силы, удар по нему, падение, победа. */
@@ -10219,7 +10306,7 @@ const SND = {
 const STR = {
   ru: {
     title: 'Набат: Город на Краю Мира', welcome: ['Пятеро переселенцев пришли на пустое место у реки. Теперь это ваш город.', 'Люди здесь — не цифры: у каждого имя, умения и настроение. Ставьте их туда, где от них больше толку.', 'Новые жители придут сами — если в городе сыто, есть свободный дом и люди довольны.', 'За околицей неспокойно. Рано или поздно к городу кто-нибудь придёт — и лучше, чтобы его увидели заранее.'], start: 'Начать',
-    tsAuto: 'Графика упрощена, чтобы игра шла плавно. Вернуть новую — меню паузы → «Новая графика»', day: 'День {d} · {h}:00', skip: 'До утра', people: 'Жители', goals: 'Вехи', chron: 'Летопись', pause: 'Пауза', resume: 'Продолжить', rules: 'Как играть', newTown: 'Начать новый город', sure: 'Начать заново?', sureP: 'Нынешний город будет потерян.', yes: 'Да', no: 'Отмена', sSound: 'Звук', sGfx: 'Новая графика', sCam: 'Камера в бою — за героем', sGest: 'Жесты в бою — рисовать знаки', vkShare: 'Рассказать друзьям', vkHelp: 'Поддержка', vkHelpGo: 'Написать', vkHelpP: ['Нашли ошибку, застряли или есть пожелание? Напишите нам в сообщения сообщества игры — ответим в течение недели.', 'Расскажите, что случилось и на каком устройстве вы играете.'],
+    tsAuto: 'Графика упрощена, чтобы игра шла плавно. Вернуть новую — меню паузы → «Новая графика»', day: 'День {d} · {h}:00', skip: 'До утра', people: 'Жители', goals: 'Вехи', chron: 'Летопись', pause: 'Пауза', resume: 'Продолжить', rules: 'Как играть', newTown: 'Начать новый город', sure: 'Начать заново?', sureP: 'Нынешний город будет потерян.', yes: 'Да', no: 'Отмена', sSound: 'Звук', sGfx: 'Новая графика', sCam: 'Камера в бою — за героем', sGest: 'Жесты в бою — рисовать знаки', sElems: 'Живой огонь — трава горит и выгорает', vkShare: 'Рассказать друзьям', vkHelp: 'Поддержка', vkHelpGo: 'Написать', vkHelpP: ['Нашли ошибку, застряли или есть пожелание? Напишите нам в сообщения сообщества игры — ответим в течение недели.', 'Расскажите, что случилось и на каком устройстве вы играете.'],
     res: { food: 'Еда', wood: 'Дерево', stone: 'Камень', gold: 'Золото' }, resLow: { food: 'еды', wood: 'дерева', stone: 'камня', gold: 'золота' },
     lotT: { lot: 'Свободный участок', field: 'Поле', forest: 'Опушка леса', rock: 'Скала', river: 'Берег реки' },
     b: { hall: ['Ратуша', 'Сердце города: налоги, праздники и строительная артель'], house: ['Дом', 'Жильё на 4 человек. Без свободного жилья переселенцы не приходят'], house2: ['Каменный дом', 'Жильё на 6 человек'],
@@ -10254,7 +10341,7 @@ const STR = {
   },
   en: {
     title: 'Warbell: Town at the World’s Edge', welcome: ['Five settlers have come to an empty spot by the river. It is your town now.', 'People here are not numbers: each has a name, skills and a mood. Put them where they do the most good.', 'New settlers come on their own — if the town is fed, has a free home and its people are content.', 'The land beyond is not safe. Sooner or later something will come to the town — and it is better to see it coming.'], start: 'Start',
-    tsAuto: 'Graphics simplified so the game runs smoothly. To bring the new look back — pause menu → “New graphics”', day: 'Day {d} · {h}:00', skip: 'To morning', people: 'People', goals: 'Goals', chron: 'Chronicle', pause: 'Paused', resume: 'Resume', rules: 'How to play', newTown: 'Start a new town', sure: 'Start over?', sureP: 'The current town will be lost.', yes: 'Yes', no: 'Cancel', sSound: 'Sound', sGfx: 'New graphics', sCam: 'Battle camera follows the hero', sGest: 'Battle gestures — draw signs', vkShare: 'Tell friends', vkHelp: 'Support', vkHelpGo: 'Write to us', vkHelpP: ['Found a bug, got stuck or have a wish? Write to the game community messages — we answer within a week.', 'Tell us what happened and which device you play on.'],
+    tsAuto: 'Graphics simplified so the game runs smoothly. To bring the new look back — pause menu → “New graphics”', day: 'Day {d} · {h}:00', skip: 'To morning', people: 'People', goals: 'Goals', chron: 'Chronicle', pause: 'Paused', resume: 'Resume', rules: 'How to play', newTown: 'Start a new town', sure: 'Start over?', sureP: 'The current town will be lost.', yes: 'Yes', no: 'Cancel', sSound: 'Sound', sGfx: 'New graphics', sCam: 'Battle camera follows the hero', sGest: 'Battle gestures — draw signs', sElems: 'Living fire — grass burns and chars', vkShare: 'Tell friends', vkHelp: 'Support', vkHelpGo: 'Write to us', vkHelpP: ['Found a bug, got stuck or have a wish? Write to the game community messages — we answer within a week.', 'Tell us what happened and which device you play on.'],
     res: { food: 'Food', wood: 'Wood', stone: 'Stone', gold: 'Gold' }, resLow: { food: 'food', wood: 'wood', stone: 'stone', gold: 'gold' },
     lotT: { lot: 'Empty lot', field: 'Field', forest: 'Forest edge', rock: 'Rock face', river: 'Riverbank' },
     b: { hall: ['Town hall', 'The heart of the town: taxes, feasts and the builders’ crew'], house: ['House', 'Home for 4. Settlers do not come without a free home'], house2: ['Stone house', 'Home for 6'],
@@ -10532,6 +10619,7 @@ function openPause() {
     if (typeof TSD !== 'undefined') { const on = () => tsPref(), tg2 = el2('button', 'tg' + (on() ? ' on' : ''), '<span>' + esc(T('sGfx')) + '</span><span class="sw2"></span>'); tg2.addEventListener('click', () => { SV.set.ts = on() ? 0 : 1; if (!SV.set.ts && typeof tsRelease === 'function') tsRelease(); tg2.className = 'tg' + (on() ? ' on' : ''); hudKey = ''; save(); }); tg2.dataset.k = 'gfx'; md.appendChild(tg2); }
     { const on = () => (typeof rtCamMode === 'function' ? rtCamMode() === 1 : false), tg3 = el2('button', 'tg' + (on() ? ' on' : ''), '<span>' + esc(T('sCam')) + '</span><span class="sw2"></span>'); tg3.addEventListener('click', () => { SV.set.rtCam = on() ? 0 : 1; if (typeof RTV !== 'undefined' && RTV.cam) RTV.cam.uz = 0; tg3.className = 'tg' + (on() ? ' on' : ''); save(); }); tg3.dataset.k = 'cam'; md.appendChild(tg3); }
     { const on = () => !!SV.set.rtGest, tg4 = el2('button', 'tg' + (on() ? ' on' : ''), '<span>' + esc(T('sGest')) + '</span><span class="sw2"></span>'); tg4.addEventListener('click', () => { SV.set.rtGest = on() ? 0 : 1; tg4.className = 'tg' + (on() ? ' on' : ''); save(); }); tg4.dataset.k = 'gest'; md.appendChild(tg4); }
+    if (typeof elOn === 'function') { const on = () => elOn(), tg5 = el2('button', 'tg' + (on() ? ' on' : ''), '<span>' + esc(T('sElems')) + '</span><span class="sw2"></span>'); tg5.addEventListener('click', () => { SV.set.elems = on() ? 0 : 1; tg5.className = 'tg' + (on() ? ' on' : ''); save(); }); tg5.dataset.k = 'elems'; md.appendChild(tg5); }
     md.appendChild(btn('btn2', svg('help') + esc(T('rules')), openRules));
     { const b = btn('btn2', svg('gift') + esc(T('shop')), openShop); b.dataset.k = 'shop'; md.appendChild(b); }
     { const b = btn('btn2', svg('flag') + esc(T('townsB')), openTowns); b.dataset.k = 'towns'; md.appendChild(b); }
@@ -13444,7 +13532,7 @@ function rtKey(c, e) {
 Object.defineProperty(DBGX, 'rtv', { get() { return { z: RTV.z, ox: RTV.ox, oy: RTV.oy, W: RTW, H: RTH, cam: RTV.cam ? { px: RTV.cam.px, py: RTV.cam.py, k: RTV.cam.k, uz: RTV.cam.uz } : null }; } });
 DBGX.rtCast = rtCast; DBGX.rtHurt = (u, d) => rtHurt(G.battle, u, d, null, {}); DBGX.RTU = RTU; DBGX.rtGo = rtGo; DBGX.rtAutoAll = rtAutoAll; DBGX.rtStart = rtStart;
 window.__art = () => DBGX_ART;
-DBGX.rtHurtO = (u, d, o) => rtHurt(G.battle, u, d, null, o || {}); DBGX.rtSteps = (n) => { const B = G.battle; for (let i = 0; i < n && !B.over; i++) rtStep(B, RTDT); }; DBGX.rtShown = rtShown;
+DBGX.rtHurtO = (u, d, o) => rtHurt(G.battle, u, d, null, o || {}); DBGX.rtSteps = (n) => { const B = G.battle; for (let i = 0; i < n && !B.over; i++) rtStep(B, RTDT); }; DBGX.rtShown = rtShown; DBGX.elState = () => EL; DBGX.SV = SV;
 
 /* ===================== Герой: годы, воля, артефакты, полубог — окна и строки ===================== */
 mergeStr(STR.ru, {
