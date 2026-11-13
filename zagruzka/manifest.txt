@@ -1,3 +1,0 @@
-target beta
-parts 4
-sha256 40e404b0d7de17898bacf2905f67d36979030beaea6f68beb5eff2ba03d41a34
