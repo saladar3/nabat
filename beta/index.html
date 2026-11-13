@@ -4017,6 +4017,7 @@ function rtStart(B) {
   if (B.boss && typeof bossRtStart === 'function') bossRtStart(B, R);
   if (typeof w2RtStart === 'function') w2RtStart(B, R);
   if (B.u.some(u => u.side === 1 && u.k === 'lich')) { const a = rtR(B) < 0.5, x = a ? SX * 0.8 : RTW - SX * 0.8; R.phyl = { px: x, py: SY * (2.2 + rtR(B) * 3), hp: 90, max: 90 }; }
+  if (typeof elWind === 'function') elWind(B);      /* погода боя: ветер (в бою с Владычицей бурь — гроза) */
   B.ph = 'rt'; return R;
 }
 function rtUnit(B, u) {
@@ -4053,6 +4054,7 @@ function rtTick(B, dtReal) {
 function rtStep(B, dt) {
   const R = B.rt; rtDims(B); R.t += dt; R.n++;
   if (B.boss && !R.bossDone && typeof bossStart === 'function') bossStart(B);
+  if ((R.ws == null || (B.boss === 'stormlady' && !R.storm)) && typeof elWind === 'function') elWind(B);
   if (R.ob.some(o => o.k === 'ice')) { for (const o of R.ob) if (o.k === 'ice' && (R.t > o.t1 || R.zn.some(z => z.k === 'fire' && Math.hypot(z.x + z.w / 2 - o.x, z.y + z.h / 2 - o.y) < 70))) { o.dead = 1; rtFx(B, { k: 'crack', x: o.x, y: o.y, dur: 0.5 }); } if (R.ob.some(o => o.dead)) { R.ob = R.ob.filter(o => !o.dead); R.gr = null; } }
   // откаты, яды, горение
   for (const u of B.u) {
@@ -4107,6 +4109,7 @@ function rtPick(B, u) {
   for (const f of fs) { let v = rtD(u, f); if (foc && !f.obj) v -= Math.min(3, foc[f.id] || 0) * 40 + (f.hp < f.max * 0.5 ? 25 : 0); if (f.obj) { if (typeof bossObjWant === 'function') { const w = bossObjWant(B, f); if (w && (w === 2 || u.rng > 0 || u.id % 2 === 0 || f.k === 'ashes')) v -= 300; else continue; } else continue; } if (f.s && f.s.taunt) v -= 220; if (f.s && f.s.fog && u.rng) v += 400; if (u.side === 1 && f.hero && btM(u).lead) v -= 60; if (u.cmdT === f.id) v -= 900; if (v < bv) { bv = v; best = f; } }
   return best;
 }
+function rtWindK(B, u, t) { const R = B.rt; if (!R || !R.ws || !t || t.px == null || u.px == null || u.magic || btM(u).magic) return 1; const dx = t.px - u.px, dy = t.py - u.py, L = Math.hypot(dx, dy) || 1; return 1 + 0.12 * Math.min(1, R.ws) * (dx * Math.cos(R.wa) + dy * Math.sin(R.wa)) / L; }      // стрела по ветру бьёт сильнее, против ветра — слабее (до ±12 %)
 function rtReach(B, u, t) { if (u.rng > 0) { let r = u.rng * RTC * 0.9 - (B.night ? RTC * 0.6 : 0); if (rtZone(B, u.px, u.py) === 'hill') r += RTC * 0.8; return Math.max(RTC * 1.6, r); } return u.r + t.r + 12; }
 function rtZoneFire(B, u) { for (const z of B.rt.zn) if (z.k === 'fire' && z.t1 < 1e8 && u.px > z.x - 4 && u.px < z.x + z.w + 4 && u.py > z.y - 4 && u.py < z.y + z.h + 4) return z; return null; }
 function rtZone(B, x, y) { for (const z of B.rt.zn) if (x > z.x && x < z.x + z.w && y > z.y && y < z.y + z.h && z.k !== 'fire') return z.k; return ''; }
@@ -4176,7 +4179,7 @@ function rtSwingHit(B, u, S) {                               // кадр уда�
   let t = t0; if (!live(t) && (S.k === 'shoot' || S.k === 'melee')) {      // цель пала, пока замахивался: удар — по ближнему рядом, стрела — в другого; некого — удар не пропал, боец сразу ищет нового
     let best = null, bd = 1e9; for (const q of rtFoes(B, u)) { const d = rtD(u, q); if (d < bd && (S.k === 'shoot' ? d <= rtReach(B, u, q) : d <= rtReach(B, u, q) + 20)) { bd = d; best = q; } }
     t = best; if (!t) { u.ac = Math.min(u.ac || 0, 0.15); return; } }
-  if (S.k === 'shoot') { B.rt.pr.push({ x: u.px, y: u.py - 18, tx: t.px, ty: t.py, tid: t.id, sp: M.magic || u.magic ? 360 : 460, d: rtDmg(B, u, t, 1, { rngd: true }), o: { rngd: 1, magic: !!(M.magic || u.magic) }, from: u.id, k: M.magic || u.magic ? 'bolt' : 'arrow' }); return; }
+  if (S.k === 'shoot') { B.rt.pr.push({ x: u.px, y: u.py - 18, tx: t.px, ty: t.py, tid: t.id, sp: M.magic || u.magic ? 360 : 460, d: rtDmg(B, u, t, rtWindK(B, u, t), { rngd: true }), o: { rngd: 1, magic: !!(M.magic || u.magic) }, from: u.id, k: M.magic || u.magic ? 'bolt' : 'arrow' }); return; }
   if (S.k !== 'melee') return;
   if (t && t.hp > 0 && !t.out && (rtD(u, t) <= rtReach(B, u, t) + 40 || btM(t).scale || btM(t).big || t.obj)) rtStrike(B, u, t, S.mul || 1, { rngd: false, kbMul: S.kbMul || 1 });
   else rtFx(B, { k: 'whiff', x: u.px + (u.face || 1) * 18, y: u.py - 16, dur: 0.25 });
@@ -4242,7 +4245,7 @@ function rtStrikeRes(B, a, t, d, o) {
     if (M.smash && !o.rngd) { const ax = t.px - a.px, ay = t.py - a.py, L = Math.hypot(ax, ay) || 1; t.px += ax / L * 34; t.py += ay / L * 34; }
     if (M.web && o.rngd) t.s.root = 2.5;
     if (o.stun) t.s.stun = Math.max(t.s.stun || 0, o.stun);
-    if (a.el === 'fire') { t.s.burn = Math.max(t.s.burn || 0, 2); } else if (a.el === 'ice') t.s.slow = Math.max(t.s.slow || 0, 2); else if (a.el === 'storm' && !o.arc) { const n = rtFoes(B, a).filter(f => f !== t && rtD(f, t) < 120)[0]; if (n) { rtFx(B, { k: 'zap', x: t.px, y: t.py - 16, x2: n.px, y2: n.py - 16, dur: 0.3 }); rtStrikeRes(B, a, n, Math.round(d * 0.5), { magic: 1, arc: 1 }); } }
+    if (a.el === 'fire') { t.s.burn = Math.max(t.s.burn || 0, 2); } else if (a.el === 'ice') t.s.slow = Math.max(t.s.slow || 0, 2); else if (a.el === 'storm' && !o.arc) { const n = rtFoes(B, a).filter(f => f !== t && rtD(f, t) < 120)[0]; if (n) { rtFx(B, { k: 'zap', x: t.px, y: t.py - 16, x2: n.px, y2: n.py - 16, dur: 0.3 }); rtStrikeRes(B, a, n, Math.round(d * 0.5), { magic: 1, arc: 1 }); if (typeof elZap === 'function') elZap(B, n.px, n.py, Math.round(d * 0.5), a, [t, n], 0); } }
     if (o.poison) { t.pd = Math.max(t.pd || 0, o.poison); t.pdN = 3; t.pdT = 1; }
   }
   if (a && M.drain && a.hp > 0) a.hp = Math.min(a.max, a.hp + Math.round(d / 2));
@@ -4357,6 +4360,7 @@ function rtTeleHit(B, T0) {
   if (T0.rock) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r }); if (typeof elRubbleAt === 'function') elRubbleAt(B, T0.x, T0.y, T0.r * 0.75, 0.7); const R1 = B.rt; R1.dec = R1.dec || []; R1.dec.push({ k: 'stones', x: T0.x, y: T0.y, r: T0.r * 0.55, n: 5, s: Math.round(T0.x * 7 + T0.y * 13), t: R1.t }); }      /* упавший камень — щебень */
   if (T0.quake && T0.by) { const a = btU(B, T0.by); if (a && typeof elCrackAt === 'function') elCrackAt(B, a.px, a.py + 10, 115); for (let i = 0; i < 3; i++) { const fs2 = B.u.filter(q => q.side !== T0.side && q.hp > 0 && !q.out && q.px != null), f = fs2[(rtR(B) * fs2.length) | 0], x = clamp((f ? f.px : RTW / 2) + (rtR(B) - 0.5) * 220, 30, RTW - 30), y = clamp((f ? f.py : RTH / 2) + (rtR(B) - 0.5) * 160, 30, RTH - 20);
       B.rt.tele.push({ k: 'circle', x: x, y: y, r: 42, t0: B.rt.t, t1: B.rt.t + 1.1 + i * 0.3, by: T0.by, side: T0.side, mul: 0.2, rock: 1 }); } }      /* землетрясение: с высоты сыплются камни — место видно заранее */
+  if (T0.sky) { rtFx(B, { k: 'bolt', x: T0.x, y: T0.y, dur: 0.4 }); if (typeof elZap === 'function') elZap(B, T0.x, T0.y, T0.dmg, null, B.u.filter(u => rtInTele(T0, u)), 0.8); rtFx(B, { k: 'flash', x: T0.x, y: T0.y, dur: 0.3 }); }      /* молния с неба: столб света, по луже — разряд */
   for (const u of B.u) {
     if (u.side === T0.side || u.hp <= 0 || u.out) continue; if (!rtInTele(T0, u)) continue; const side2 = T0.swing && T0.one && u.id !== T0.tid; if (side2 && !T0.sw) continue;
     if (u.s.parry || (u.standUp && B.rt.t - u.standUp < 0.35)) { rtParry(B, u, a); continue; }
@@ -4422,7 +4426,7 @@ function rtCast(B, ab, p) {
   if (ab === 'rally') { let n = 0; for (const q of rtLive(B, 0)) if (rtD(q, u) < 260) { q.s.buff = 8; if (!q.s.curse) q.hp = Math.min(q.max, q.hp + q.max * 0.12); if (q.s.stun && q.green) delete q.s.stun; n++; } rtFx(B, { k: 'rally', x: u.px, y: u.py, dur: 0.9 }); rtSpend(B, u, ab); return n; }
   if (ab === 'stand') { u.s.standH = 99; u.s.stand = 99; u.s.taunt = 99; u.an = 'guard'; return 'ok'; }
   if (ab === 'bolt') { const dx = p.x - u.px, dy = p.y - u.py, L = Math.hypot(dx, dy) || 1, k = Math.min(1, 520 / L), tx = u.px + dx * k, ty = u.py + dy * k; R.pr.push({ x: u.px, y: u.py - 20, tx: tx, ty: ty, tid: 0, sp: 520, d: 0, o: { magic: 1, fire: 1, mul: 1.2 + 0.15 * lv }, from: u.id, k: 'fire', boom: 62 }); rtSpend(B, u, ab); return 'ok'; }
-  if (ab === 'chain') { let last = { px: u.px, py: u.py }, hit = [], n = 0; const fs = rtFoes(B, u); let cur = fs.slice().sort((a, b) => Math.hypot(a.px - p.x, a.py - p.y) - Math.hypot(b.px - p.x, b.py - p.y))[0]; const jumps = 3 + Math.floor(lv / 2) + (typeof artSum === 'function' ? artSum('chain', B) : 0); while (cur && n < jumps) { rtFx(B, { k: 'zap', x: last.px, y: last.py - 16, x2: cur.px, y2: cur.py - 16, dur: 0.3 }); rtStrike(B, u, cur, 1.1 + 0.1 * lv, { rngd: true, magic: true }); if (typeof resoOn === 'function' && resoOn('venom', B) && cur.hp > 0) { cur.pd = Math.max(cur.pd || 0, 3); cur.pdN = 3; cur.pdT = 1; } hit.push(cur); n++; last = cur; cur = fs.filter(f => hit.indexOf(f) < 0 && f.hp > 0 && rtD(f, last) < 200).sort((a, b) => rtD(a, last) - rtD(b, last))[0]; } if (!n) return 'far'; rtSpend(B, u, ab); return n; }
+  if (ab === 'chain') { let last = { px: u.px, py: u.py }, hit = [], n = 0; const fs = rtFoes(B, u); let cur = fs.slice().sort((a, b) => Math.hypot(a.px - p.x, a.py - p.y) - Math.hypot(b.px - p.x, b.py - p.y))[0]; const jumps = 3 + Math.floor(lv / 2) + (typeof artSum === 'function' ? artSum('chain', B) : 0); while (cur && n < jumps) { rtFx(B, { k: 'zap', x: last.px, y: last.py - 16, x2: cur.px, y2: cur.py - 16, dur: 0.3 }); rtStrike(B, u, cur, 1.1 + 0.1 * lv, { rngd: true, magic: true }); if (typeof elZap === 'function') elZap(B, cur.px, cur.py, Math.round((u.d || 8) * (1.1 + 0.1 * lv)), u, hit.concat([cur]), n ? 0 : 0.35);      /* в луже — разряд по всем, кто в воде */ if (typeof resoOn === 'function' && resoOn('venom', B) && cur.hp > 0) { cur.pd = Math.max(cur.pd || 0, 3); cur.pdN = 3; cur.pdT = 1; } hit.push(cur); n++; last = cur; cur = fs.filter(f => hit.indexOf(f) < 0 && f.hp > 0 && rtD(f, last) < 200).sort((a, b) => rtD(a, last) - rtD(b, last))[0]; } if (!n) return 'far'; rtSpend(B, u, ab); return n; }
   if (ab === 'ward') { const r = clamp(p.r || 110, 70, 160); let n = 0; for (const q of rtLive(B, 0)) if (Math.hypot(q.px - p.x, q.py - p.y) < r) { q.s.ward = (6 + lv) * (typeof artOnK === 'function' && artOnK('shell', B) ? 1.5 : 1); n++; } rtFx(B, { k: 'ward', x: p.x, y: p.y, r: r, dur: 6 + lv }); rtSpend(B, u, ab); return n; }
   if (ab === 'fog') { R.zn.push({ x: p.x - 140, y: p.y - 140, w: 280, h: 280, k: 'fog', t1: 8, cx: p.x, cy: p.y }); for (const f of rtFoes(B, u)) if (Math.hypot(f.px - p.x, f.py - p.y) < 150) { f.s.slow = 7; f.s.fog = 7; } rtFx(B, { k: 'fog', x: p.x, y: p.y, r: 150, dur: 8 }); rtSpend(B, u, ab); return 'ok'; }
   if (ab === 'ice') { let n = 0; for (const f of rtFoes(B, u)) if (Math.hypot(f.px - p.x, f.py - p.y) < 110 + f.r * 0.5) { f.s.frz = 2.2 + 0.2 * lv; n++; } rtFx(B, { k: 'ice', x: p.x, y: p.y, r: 110, dur: 0.6 }); const dz = rtDouse(B, (x, y, r) => Math.hypot(x - p.x, y - p.y) < 110 + r * 0.35, 110, u.side); if (!n && !dz) { rtSpend(B, u, ab); return 'none'; } rtSpend(B, u, ab); return n || dz;      /* стужа гасит огонь на земле и горящих рядом */ }
@@ -4509,7 +4513,7 @@ function rtAutoAll(B, secs) {
   while (!B.over && g++ < lim) rtStep(B, RTDT);
   if (!B.over) rtEnd(B, 'retreat'); return B.over;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtBoom, rtDouse, rtGust, rtInTele, rtLos, rtRockHit, rtMoveTo, rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtReach, rtWindK, rtHurt, rtBoom, rtDouse, rtGust, rtInTele, rtLos, rtRockHit, rtMoveTo, rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
 
 /* ===================== Жесты: что нарисовал палец (без DOM) ===================== */
 /* По росчерку на экране — вид жеста: касание, удержание, линия, круг, дуга, зигзаг, спираль, галка.
@@ -4975,7 +4979,7 @@ function bossAct(B, u, near, dt) {
     return false;
   }
   if (k === 'stormlady') {
-    if (dd < 420 && rtCd(B, u, 'chain', 6)) { let last = u, cur = t, n = 0; const hit = []; while (cur && n < 4) { rtFx(B, { k: 'zap', x: last.px, y: last.py - 16, x2: cur.px, y2: cur.py - 16, dur: 0.3 }); rtStrike(B, u, cur, 1.1, { rngd: true, magic: true }); hit.push(cur); n++; last = cur; cur = fs.filter(f => hit.indexOf(f) < 0 && f.hp > 0 && rtD(f, last) < 150).sort((a, b) => rtD(a, last) - rtD(b, last))[0]; } u.an = 'cast'; u.at = 0; return true; }
+    if (dd < 420 && rtCd(B, u, 'chain', 6)) { let last = u, cur = t, n = 0; const hit = []; while (cur && n < 4) { rtFx(B, { k: 'zap', x: last.px, y: last.py - 16, x2: cur.px, y2: cur.py - 16, dur: 0.3 }); rtStrike(B, u, cur, 1.1, { rngd: true, magic: true }); if (typeof elZap === 'function') elZap(B, cur.px, cur.py, Math.round((u.d || 10) * 1.1), u, hit.concat([cur]), n ? 0 : 0.35); hit.push(cur); n++; last = cur; cur = fs.filter(f => hit.indexOf(f) < 0 && f.hp > 0 && rtD(f, last) < 150).sort((a, b) => rtD(a, last) - rtD(b, last))[0]; } u.an = 'cast'; u.at = 0; return true; }
     if (fs.some(f => rtD(f, u) < 200) && rtCd(B, u, 'wind', 11)) { for (const f of fs) if (rtD(f, u) < 260 && !btM(f).big) { const ax = f.px - u.px, ay = f.py - u.py, L = Math.hypot(ax, ay) || 1; f.px = clamp(f.px + ax / L * 90, 14, RTW - 14); f.py = clamp(f.py + ay / L * 90, 14, RTH - 8); f.s.slow = 2; } rtFx(B, { k: 'whirl', x: u.px, y: u.py, r: 260, dur: 0.5 }); rtGust(B, (x, y) => Math.hypot(x - u.px, y - u.py) < 260, u.side, u.px, u.py); u.an = 'cast'; u.at = 0; return true; }      /* вихрь Владычицы бурь сдувает огонь */
     if (dd < 110) { const ax = u.px - t.px, ay = u.py - t.py, L = Math.hypot(ax, ay) || 1; rtMoveTo(B, u, u.px + ax / L * 90, u.py + ay / L * 90, dt); return true; }
     return false;
@@ -6000,7 +6004,7 @@ function elInit(B, snow) {
   const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), frost: new Uint8Array(n), wet: new Uint8Array(n), inl: new Uint8Array(n), gas: new Uint8Array(n), gas2: new Float32Array(n), tar: new Uint8Array(n), rub: new Uint8Array(n), rubN: 0, hi: new Uint8Array(n), flm: new Uint32Array(n), gasOn: 0, gdirty: 0, zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
     t: R.t, acc: 0, tick: 0, bursts: [], seen: new WeakSet(), steam: [], gusts: [], ices: new Map(), fw: 0, seed: ((((B.tid || 1) + 7) * 2654435761) ^ 0x9e3779b9) >>> 0 || 1, wind: 0, dirty: 0, zn: 0, snow: !!snow };
   { const a = elRnd(E) * Math.PI * 2, sw = (B.tr === 'steppe' || B.tr === 'plain' || B.tr === 'meadow' || B.tr === 'hills' ? 0.45 : B.tr === 'forest' ? 0.2 : 0.3) + elRnd(E) * 0.55;      // ветер боя: направление и сила (в лесу тише, в степи сильнее)
-    E.wx = Math.cos(a) * sw; E.wy = Math.sin(a) * sw * 0.6; E.wind = E.wx; }
+    E.wx = Math.cos(a) * sw; E.wy = Math.sin(a) * sw * 0.6; if (R.ws != null) { E.wx = R.wx; E.wy = R.wy; } E.wind = E.wx; }      /* погода боя (elWind) главнее */
   { const se = typeof season === 'function' && typeof G !== 'undefined' && G ? season() : 1;      // сухость травы: пора года, местность, ночная роса
     E.dry = (snow || se === 3 ? 0.06 : se === 1 ? 1 : se === 2 ? 0.8 : 0.45) * (B.tr === 'steppe' ? 1.3 : B.tr === 'plain' || B.tr === 'meadow' ? 1.1 : B.tr === 'hills' ? 1.05 : B.tr === 'forest' ? 0.85 : B.tr === 'barrow' ? 0.9 : B.tr === 'ruins' ? 0.8 : B.tr === 'swamp' || B.tr === 'lake' ? 0.6 : B.tr === 'mount' ? 0.7 : B.tr === 'volcano' ? 0.5 : 1)      /* открытая степь и луг сохнут сильнее, под пологом леса трава сырее */ * (B.night ? 0.75 : 1); }
   const base = snow ? 6 : B.tr === 'volcano' ? 6 : B.tr === 'mount' ? 12 : B.tr === 'steppe' ? 18 : 24;      // запас травы — сколько тиков (1/20 с) клетка горит: трава прогорает за секунду-полторы, фронт огня — узкая полоса
@@ -6084,7 +6088,7 @@ function elDry(E) {                                                             
   const n = E.n, frost = E.frost, wet = E.wet, fm = E.snow ? 2 : 5, wm = E.snow ? 1 : 2; let any = 0;
   for (let i = 0; i < n; i++) { const f = frost[i], v = wet[i];
     if (f) { if (f > fm) frost[i] = f - fm; else { frost[i] = 0; if (v < 110) wet[i] = 110; } any = 1; }
-    else if (v && v < 255) { wet[i] = v > wm ? v - wm : 0; any = 1; } }
+    else if (v && v < 255) { if (!E.rain) wet[i] = v > wm ? v - wm : 0; any = 1; } }      /* под дождём лужи не сохнут */
   E.fw = any; if (any) E.dirty = 1;
 }
 function elZoneOn(z) { return z.k === 'fire' && !z.dead && z.t1 > 0 && z.t1 < 1e8; }      // вечные костры — отдельный облик, сетку не жгут
@@ -6134,13 +6138,14 @@ function elTick(E) {
     if (st % 2 === 0) elGasStep(E); }
 }
 function elNeed(B) {                                                              // есть ли в бою хоть что-то для сетки: огонь, стужа, лёд (иначе сетку и не заводим)
-  const R = B.rt; for (const z of R.zn) if (elZoneOn(z)) return true; for (const o of R.ob) if (o.k === 'ice') return true;
+  const R = B.rt; if (R.storm) return true; for (const z of R.zn) if (elZoneOn(z)) return true; for (const o of R.ob) if (o.k === 'ice') return true;
   if (R.fx) for (const f of R.fx) if ((f.k === 'boom' && f.fire) || f.k === 'ice' || f.k === 'frostcone') return true;
   if (B.tars > 0 && !R.tarDone && R.ph === 'run') return true; if (R.dec) for (const d of R.dec) if (d.br) return true; if (R.fx) for (const f of R.fx) if (f.k === 'miasma' || f.k === 'venomcone') return true; return false;
 }
 function elSim(B, dt) {                                                           // шаг боя (rtStep): сетка идёт вместе с боем — пауза, замедление, автобой, проверки без экрана
   if (!B || !B.rt) return null; let E = EL && EL.B === B ? EL : null; if (!E) { if (!elNeed(B)) return null; E = elGet(B); E.t = B.rt.t; }
   if (B.tars > 0 && !B.rt.tarDone && B.rt.ph === 'run') elTarLine(B, E);
+  if (B.rt.storm) elRain(B, E);
   E.acc += dt * ELHZ; let n = 0; while (E.acc >= 1 && n < 8) { elTick(E); E.acc -= 1; n++; elBurnUnits(E); } if (E.acc > 1) E.acc = 0; E.t = B.rt.t; return E;
 }
 function elCellAt(E, x, y) { const cx = Math.floor(x / ELC), cy = Math.floor(y / ELC); return cx < 0 || cy < 0 || cx >= E.w || cy >= E.h ? -1 : cy * E.w + cx; }
@@ -6168,8 +6173,37 @@ function elGust(B, inside, ox, oy) {                                            
     E.fire[i] = 0; if (E.fuel[i] > 4) E.fuel[i] = 4; n++; if (E.gusts.length < 60 && elRnd(E) < 0.3) E.gusts.push(i, ox == null ? x : ox, oy == null ? y : oy); }
   return n;
 }
+function elWind(B) {                                                              // ветер боя — погода: видно с начала боя, им же живёт сетка (elInit берёт его отсюда); случай — от похода и боя
+  const R = B.rt; if (!R) return; if (R.ws == null) { const E = { seed: (((((B.tid || 0) * 7919 + (B.rs || 1)) + 7) * 2654435761) ^ 0x85ebca6b) >>> 0 || 1 }, a = (elRnd(E), elRnd(E) * Math.PI * 2), sw = (B.tr === 'steppe' || B.tr === 'plain' || B.tr === 'meadow' || B.tr === 'hills' ? 0.45 : B.tr === 'forest' ? 0.2 : 0.3) + elRnd(E) * 0.55;
+    R.wa = a; R.ws = sw; R.wx = Math.cos(a) * sw; R.wy = Math.sin(a) * sw * 0.6; }
+  if (B.boss === 'stormlady' && !R.storm) { R.storm = 1; R.ws = Math.max(R.ws, 0.65); R.wx = Math.cos(R.wa) * R.ws; R.wy = Math.sin(R.wa) * R.ws * 0.6; if (EL && EL.B === B) { EL.wx = R.wx; EL.wy = R.wy; EL.wind = EL.wx; } }      /* бой с Владычицей бурь — в грозу: сильный ветер, дождь, молнии с неба */
+}
+function elZap(B, x, y, d, a, skip, dry) {                                        // молния в точку: по луже — разряд всем, кто стоит в воде (и своим); сухую траву (dry — шанс) и яд поджигает
+  const E = elGet(B); if (!E) return 0; const c0 = elCellAt(E, x, y); if (c0 < 0) return 0; const R = B.rt, wv = E.wet[c0]; let n = 0;
+  if (E.gas[c0] > 40) elLight(E, c0, 12);      /* яд вспыхивает от искры */
+  if (wv > 70) { const w = E.w, cx0 = c0 % w, cy0 = (c0 / w) | 0, seen = new Set([c0]), q = [c0];      /* вода проводит (лужа, топь, промокшая земля — и та, где растаял иней): обходим всю воду в пределах ~90 точек */
+    for (let k = 0; k < q.length && q.length < 180; k++) { const i = q[k], x0 = i % w; for (const j of [i - 1, i + 1, i - w, i + w]) { if (j < 0 || j >= E.n || seen.has(j) || Math.abs((j % w) - x0) > 1) continue; if (E.wet[j] <= 70 || Math.hypot((j % w) - cx0, (((j / w) | 0) - cy0) * 1.25) > 11) continue; seen.add(j); q.push(j); } }
+    E.zapC = q; E.zapT = R.t; const dd = Math.max(1, Math.round(d * 0.45));
+    for (const u of B.u) { if (u.hp <= 0 || u.out || u.px == null || (skip && skip.indexOf(u) >= 0) || btM(u).fly) continue; const i = elCellAt(E, u.px, u.py); if (i < 0 || !seen.has(i)) continue;
+      rtHurt(B, u, dd, a && a.side !== u.side ? a : null, { magic: 1, storm: 1 }); if (u.hp > 0) u.s.stun = Math.max(u.s.stun || 0, 0.35); n++; }
+    rtFx(B, { k: 'flash', x: x, y: y, dur: 0.3 }); return n; }
+  if (!wv && !E.frost[c0] && E.fuel[c0] > 2 && E.fire[c0] < 5 && elRnd(E) < (dry == null ? 0.35 : dry) * Math.min(1, E.dry)) elLight(E, c0, 9);      /* сухая трава занимается от удара */
+  return 0;
+}
+function elRain(B, E) {                                                            // гроза: дождь собирается лужами, огонь гаснет; раз в 7–11 с — молния с неба (место видно заранее)
+  const R = B.rt; if (!E.rain) { E.rain = 1; E.fw = 1; E.pud = []; for (let k = 0; k < 12; k++) E.pud.push({ x: 2 + elRnd(E) * (E.w - 4), y: 3 + elRnd(E) * (E.h - 6), r: 0, m: 4 + elRnd(E) * 5 }); E.boltT = R.t + 5 + elRnd(E) * 3; }
+  E.dry = Math.min(E.dry, 0.05);      /* мокрая трава почти не горит */
+  if (R.ph !== 'run') return;
+  if (((R.t * 4) | 0) !== (((E.rainT || 0) * 4) | 0)) { E.rainT = R.t;      /* четыре раза в секунду лужи понемногу растут */
+    for (const p of E.pud) { if (p.r < p.m) p.r += 0.12; for (let y = Math.max(0, Math.floor(p.y - p.r)); y <= Math.min(E.h - 1, Math.ceil(p.y + p.r)); y++) for (let x = Math.max(0, Math.floor(p.x - p.r * 1.3)); x <= Math.min(E.w - 1, Math.ceil(p.x + p.r * 1.3)); x++) {
+      const i = y * E.w + x, e = Math.hypot((x - p.x) / 1.3, y - p.y) / Math.max(0.5, p.r); if (e > 1 - elHash(i + 31) * 0.25 || E.wet[i] === 255) continue; E.wet[i] = Math.min(230, E.wet[i] + 24); if (E.fire[i]) E.fire[i] = Math.max(0, E.fire[i] - 4); } }
+    E.fw = 1; E.dirty = 1; }
+  if (R.t >= E.boltT) { E.boltT = R.t + 7 + elRnd(E) * 4; const al = B.u.filter(u => u.hp > 0 && !u.out && u.px != null && !u.obj); if (!al.length) return; const t = al[(elRnd(E) * al.length) | 0];      /* молния не разбирает, где свои, где чужие */
+    const x = Math.max(30, Math.min(RTW - 30, t.px + (elRnd(E) - 0.5) * 90)), y = Math.max(30, Math.min(RTH - 20, t.py + (elRnd(E) - 0.5) * 60));
+    R.tele.push({ k: 'circle', x: x, y: y, r: 46, t0: R.t, t1: R.t + 1.3, side: -1, dmg: 4 * RTK, sky: 1 }); }
+}
 function elStep(B) { return EL && EL.B === B ? EL : null; }                      // отрисовка: сетка шагает в бою, отсюда только читаем
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { ELC, ELHZ, elInit, elGet, elTick, elStep, elSim, elFlee, elNeed, elCellAt, elBurnUnits, elGust, elGasAdd, elGasStep, elGasFree, elTarPour, elTarLine, elRubble, elCrack, elRubbleAt, elCrackAt, elLight, elZoneOn, elCold, elDry, elState: () => EL });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { ELC, ELHZ, elWind, elZap, elRain, elInit, elGet, elTick, elStep, elSim, elFlee, elNeed, elCellAt, elBurnUnits, elGust, elGasAdd, elGasStep, elGasFree, elTarPour, elTarLine, elRubble, elCrack, elRubbleAt, elCrackAt, elLight, elZoneOn, elCold, elDry, elState: () => EL });
 
 /* ===================== Отрисовка города ===================== */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -8554,6 +8588,8 @@ function rtDrawFx(B, f, t) {
   else if (k === 'mark') { ctx.strokeStyle = '#ff5a4a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X, Y, 18 * (1.4 - a * 0.4), 0, 6.3); ctx.stroke(); }
   else if (k === 'shadow') { ctx.strokeStyle = 'rgba(60,40,90,0.8)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(rX(f.x2), rY(f.y2)); ctx.stroke(); }
   else if (k === 'breath') { const D = TSD.fx_fire_02; for (let i = 0; i < 14; i++) { const q = ((i * 37) % 100) / 100, an = f.a + (((i * 53) % 100) / 100 - 0.5) * f.half * 1.6, r = f.len * (0.25 + q * 0.75); const x = X + Math.cos(an) * r * z, y = Y + Math.sin(an) * r * z; if (TS.ready && D) tsBlit(tsCanvas('fx_fire_02'), D, Math.floor(t * 12 + i), x, y + 10 * z, TSS * z * 2.4, false, 0); } }
+  else if (k === 'bolt') { }      /* молния с неба — поверх грозового сумрака, в elSkyDraw */
+  else if (k === 'flash') { }      /* вспышка — поверх ночи, в elSkyDraw */
   else if (k === 'crack' || k === 'trap') { ctx.strokeStyle = k === 'trap' ? '#c8ced8' : TSP.out; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X - 10, Y - 4); ctx.lineTo(X, Y + 4); ctx.lineTo(X + 10, Y - 4); ctx.stroke(); }
   ctx.globalAlpha = 1;
 }
@@ -8613,6 +8649,7 @@ function renderRt(t) {
   ctx.globalAlpha = 1;
   // ночь — темнота с кругами света у героя, отряда и огня
   if (B.night) rtNight(B, t, z);
+  if (typeof elSkyDraw === 'function') elSkyDraw(B, t, z);      /* небо боя: ветер, дождь, вспышки молний (поверх ночи) */
   // замедление, пока рисуется знак
   if (R.slow < 1) { ctx.fillStyle = 'rgba(40,70,140,0.16)'; ctx.fillRect(0, 0, W, H); }
   if (typeof rtTrailDraw === 'function') rtTrailDraw(t);
@@ -10341,16 +10378,17 @@ function elGround(E, z) {                                                       
       if (v) { a = Math.min(1, v * (0.6 + hs * 0.3) / 255); r = 27; g = 24; b = 21; }      /* гарь — серо-чёрная, а не оливковая */
       const rb = E.rub[i]; if (rb) { const crk = rb < 100, st = rb > 185, sa = crk ? 0.72 : st ? 0.36 : 0.24, sr = crk ? 36 : st ? 84 : 112, sg = crk ? 31 : st ? 70 : 96, sb = crk ? 26 : st ? 54 : 74, na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = crk ? 2 : st ? 3 : 8; }      /* щебень: пыльная земля, камешки дорисует вторая ступень; трещина — тёмная */
       const tv = T[i]; if (tv) { const x = i % w, rim = (x > 0 && !T[i - 1]) || (x < w - 1 && !T[i + 1]) || (i >= w && !T[i - w]) || (i + w < n && !T[i + w]), sa = rim ? 0.72 : Math.max(0.6, Math.min(0.93, (tv - 120) / 90 + 0.5)), sr = rim ? 52 - hs * 8 : 19 - hs * 5, sg = rim ? 37 - hs * 6 : 16 - hs * 4, sb = rim ? 22 - hs * 4 : 14 - hs * 3, na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = 4; }      /* смола — почти чёрная, по краю тонкая и бурая */
-      if (wv && wv < 255) { const pud = wv > 150, glint = pud && hs > 0.84, sa = glint ? 0.62 : pud ? 0.56 : Math.min(0.5, wv / 300), sr = glint ? 178 : pud ? 66 : 28, sg = glint ? 206 : pud ? 104 : 42, sb = glint ? 228 : pud ? 138 : 52,      /* лужа — серо-синяя вода с бликами; подсыхая, темнеет сыростью */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = pud ? 6 : k > 1 ? k : 5; }
+      if (wv && wv < 255) { const pud = wv > 150, sa = pud ? 0.6 + hs * 0.06 : Math.min(0.5, wv / 300), sr = pud ? 60 + hs * 10 : 28, sg = pud ? 88 + hs * 10 : 42, sb = pud ? 112 + hs * 10 : 52,      /* лужа — серо-синяя вода с бликами; подсыхая, темнеет сыростью */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = pud ? 6 : k > 1 ? k : 5; }
       if (f) { const spark = hs > 0.93 && f > 140, sa = spark ? 0.85 : Math.min(0.62, f / 430 + hs * 0.14), sr = spark ? 255 : 222, sg = spark ? 255 : 238, sb = 250,      /* иней — сквозь него видна трава, редкие искры */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; if (f > 100) k = 7; }
       d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = (a * 255) | 0; K[i] = k; }
     if (any) { const D = ELV.img.data;      /* вторая ступень: каждая клетка — 2×2 точки; угол берёт цвет соседа, если два соседа у этого угла одного рода, а два других — нет */
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, P = K[i], iA = y > 0 ? i - w : i, iD = y < h - 1 ? i + w : i, iC = x > 0 ? i - 1 : i, iB = x < w - 1 ? i + 1 : i, Ak = K[iA], Dk = K[iD], Ck = K[iC], Bk = K[iB];
         let s0 = i, s1 = i, s2 = i, s3 = i; if (Ck === Ak && Ck !== Dk && Ak !== Bk) s0 = iA; if (Ak === Bk && Ak !== Ck && Bk !== Dk) s1 = iB; if (Dk === Ck && Dk !== Bk && Ck !== Ak) s2 = iC; if (Bk === Dk && Bk !== Ak && Dk !== Ck) s3 = iD;
-        const o = (y * 2 * W2 + x * 2) * 4, sh = P === 4 && Ak === 4 && Bk === 4 && Ck === 4 && Dk === 4 && ((((i * 2654435761) >>> 28) & 15) > 13);      /* жирный блик на смоле — короткая полоска */
+        const o = (y * 2 * W2 + x * 2) * 4, hb = (((i * 2654435761) >>> 28) & 15), sh = P === 4 && Ak === 4 && Bk === 4 && Ck === 4 && Dk === 4 && hb > 13, shw = P === 6 && Ak === 6 && Bk === 6 && Ck === 6 && Dk === 6 && hb > 12;      /* блик на смоле и на воде — короткая полоска */
         const hq = (((i * 2246822519) >>> 27) & 31) / 31, cr = P === 2 ? (1 | (x < w - 1 && Bk === 2 ? 2 : 0) | (y < h - 1 && Dk === 2 ? 4 : 0) | (x > 0 && y < h - 1 && K[i + w - 1] === 2 ? 4 : 0)) : 0;
         for (let q = 0; q < 4; q++) { const sc = (q === 0 ? s0 : q === 1 ? s1 : q === 2 ? s2 : s3) * 4, oo = o + ((q & 1) * 4) + ((q >> 1) * W2 * 4);
           if (sh && q < 2) { D[oo] = 84; D[oo + 1] = 88; D[oo + 2] = 98; D[oo + 3] = 235; continue; }
+          if (shw && q === (hb & 1)) { D[oo] = 168; D[oo + 1] = 196; D[oo + 2] = 220; D[oo + 3] = 190; continue; }
           if (cr) { if (q === 0 || (q === 1 && cr & 2) || (q === 2 && cr & 4)) { D[oo] = d[i * 4]; D[oo + 1] = d[i * 4 + 1]; D[oo + 2] = d[i * 4 + 2]; D[oo + 3] = d[i * 4 + 3]; } else D[oo + 3] = 0; continue; }      /* трещина — линия в полклетки шириной */
           D[oo] = d[sc]; D[oo + 1] = d[sc + 1]; D[oo + 2] = d[sc + 2]; D[oo + 3] = d[sc + 3]; } }
       ELV.g.putImageData(ELV.img, 0, 0); } else if (ELV.any) ELV.g.clearRect(0, 0, W2, H2);
@@ -10403,6 +10441,35 @@ function elNightGlow() {                                                        
   for (let j = 0; j < E.cnt; j++) { const i = E.list[j], f = fire[i]; if (!f) continue; const x = i % w, y = (i / w) | 0, X0 = Math.round(rX(x * ELC)), Y0 = Math.round(rY(y * ELC)), cw = Math.round(rX((x + 1) * ELC)) - X0, ch = Math.round(rY((y + 1) * ELC)) - Y0;
     ctx.fillStyle = f >= 9 ? 'rgb(64,34,9)' : f >= 5 ? 'rgb(48,23,6)' : 'rgb(26,10,3)'; ctx.fillRect(X0, Y0, cw, ch); }      /* мягко: бойцы в огне не должны выцветать до белого */
   ctx.globalCompositeOperation = 'source-over';
+}
+function elSkyDraw(B, t, z) {                                                     // небо боя поверх всего поля: дождь и ветер, вспышки молний, треск разряда по луже, флюгер
+  const R = B.rt; if (!R || R.ws == null) return; const ox = RTV.ox, oy = RTV.oy, W = RTW * z, H = RTH * z, cine = typeof CINE !== 'undefined' && CINE.on, ca = Math.cos(R.wa), sa = Math.sin(R.wa) * 0.6;
+  if (R.storm) { ctx.fillStyle = 'rgba(16,24,40,0.34)'; ctx.fillRect(ox, oy, W, H);      /* гроза: сумрак и косой дождь по ветру */
+    const vx = ca * R.ws * 300, vy = 700 + sa * 120, L = 0.03; ctx.strokeStyle = 'rgba(214,226,242,0.5)'; ctx.lineWidth = Math.max(1, 1.3 * z); ctx.beginPath();
+    for (let i = 0; i < 300; i++) { const hx = ((i * 2654435761) >>> 8 & 4095) / 4095, hy = ((i * 2246822519) >>> 8 & 4095) / 4095, x = ((hx * RTW + t * vx) % RTW + RTW) % RTW, y = ((hy * RTH + t * vy) % RTH + RTH) % RTH; ctx.moveTo(ox + x * z, oy + y * z); ctx.lineTo(ox + (x - vx * L) * z, oy + (y - vy * L) * z); }
+    ctx.stroke(); const E0 = typeof elStep === 'function' ? elStep(B) : null;
+    if (E0 && E0.pud) { ctx.strokeStyle = 'rgba(220,232,248,0.55)'; ctx.lineWidth = Math.max(1, z); ctx.beginPath();      /* капли бьют по лужам — круги */
+      for (let i = 0; i < 40; i++) { const p = E0.pud[i % E0.pud.length]; if (p.r < 1) continue; const h1 = ((i * 2654435761) >>> 8 & 4095) / 4095, h2 = ((i * 2246822519) >>> 8 & 4095) / 4095, ph = (t * 1.7 + h1) % 1, lf = Math.floor(t * 1.7 + h1), aa = (h2 * 6.283 + lf * 2.4), rr = p.r * Math.sqrt((h1 * 7 + lf * 0.37) % 1) * 0.85, x = (p.x + Math.cos(aa) * rr * 1.3) * ELC, y = (p.y + Math.sin(aa) * rr) * ELC, q = ph * 7 * z;
+        if (E0.wet[E0.w * Math.floor(y / ELC) + Math.floor(x / ELC)] <= 150) continue; ctx.moveTo(ox + x * z + q, oy + y * z); ctx.ellipse(ox + x * z, oy + y * z, q, q * 0.45, 0, 0, 6.3); } ctx.stroke(); } }
+  else if (R.ws > 0.3 && !cine) { const n = Math.round(R.ws * 18); ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, 1.6 * z);      /* ветер: редкие светлые струйки по полю — видно, куда дует */
+    for (let i = 0; i < n; i++) { const h1 = ((i * 2654435761) >>> 8 & 4095) / 4095, h2 = ((i * 2246822519) >>> 8 & 4095) / 4095, ph = (t * (0.28 + R.ws * 0.25) + h1) % 1, life = Math.floor(t * (0.28 + R.ws * 0.25) + h1), hx = (h2 * 997 + life * 0.618) % 1, hy = (h1 * 613 + life * 0.381) % 1;
+      const x0 = hx * RTW, y0 = hy * RTH, d = ph * 200, x = x0 + ca * d, y = y0 + sa * d, len = 40 + h2 * 34, a = Math.sin(ph * Math.PI) * 0.4; if (x < 0 || y < 0 || x > RTW || y > RTH) continue;
+      ctx.strokeStyle = 'rgba(240,246,255,' + a.toFixed(3) + ')'; ctx.beginPath(); ctx.moveTo(ox + x * z, oy + y * z); ctx.quadraticCurveTo(ox + (x - ca * len * 0.5) * z, oy + (y - sa * len * 0.5 - 3) * z, ox + (x - ca * len) * z, oy + (y - sa * len) * z); ctx.stroke(); } ctx.lineCap = 'butt'; }
+  const E = typeof elStep === 'function' ? elStep(B) : null;
+  if (E && E.zapC && R.t - E.zapT < 0.45) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(190,220,255,0.85)'; ctx.lineWidth = Math.max(1, 1.4 * z); ctx.beginPath();      /* разряд бежит по воде: искры-зигзаги */
+    const C = E.zapC; for (let k = 0; k < Math.min(60, C.length); k++) { const i = C[(Math.random() * C.length) | 0], x = (i % E.w) * ELC, y = ((i / E.w) | 0) * ELC; ctx.moveTo(ox + x * z, oy + (y + 4) * z); ctx.lineTo(ox + (x + 3) * z, oy + (y + 1) * z); ctx.lineTo(ox + (x + 5) * z, oy + (y + 6) * z); ctx.lineTo(ox + (x + 8) * z, oy + (y + 3) * z); }
+    ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; }
+  let fl = 0; for (const f of R.fx || []) { const a = (R.t - f.t0) / f.dur; if (a < 0 || a >= 1) continue; if (f.k === 'flash') fl = Math.max(fl, 1 - a); else if (f.k === 'bolt') elBoltDraw(f, a, z); }
+  if (fl > 0) { ctx.fillStyle = 'rgba(225,235,255,' + ((B.night || R.storm ? 0.42 : 0.16) * fl).toFixed(3) + ')'; ctx.fillRect(ox, oy, W, H); }      /* вспышка: ночью и в грозу светлеет всё поле */
+}
+function elBoltDraw(f, a, z) {                                                   // молния с неба: ломаный столб, синий ореол, белая сердцевина, отросток; гаснет мерцая
+  const X = rX(f.x), Y = rY(f.y), top = RTV.oy, sd = Math.round(f.x * 7 + f.y * 13 + f.t0 * 50), hj = i => ((((sd + i * 7919) * 2654435761) >>> 16) & 1023) / 1023 - 0.5, P = [[X + hj(99) * 60 * z, top]];
+  for (let i = 1; i <= 10; i++) { const q = i / 10; P.push([X + (P[0][0] - X) * (1 - q) + (i < 10 ? hj(i) * 40 * z : 0), top + (Y - top) * q]); }
+  const fl = a < 0.25 ? 1 : (Math.floor(a * 14) % 2 ? 0.35 : 0.9) * (1 - a); ctx.globalAlpha = fl; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const ln = (w, c) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (const p of P) ctx.lineTo(p[0], p[1]); ctx.stroke(); };
+  ln(16 * z, 'rgba(110,160,255,0.3)'); ln(6 * z, '#cfe2ff'); ln(2.4 * z, '#ffffff');
+  const b = 3 + ((sd >>> 3) % 4); ctx.strokeStyle = '#dbe9ff'; ctx.lineWidth = 2.2 * z; ctx.beginPath(); ctx.moveTo(P[b][0], P[b][1]); ctx.lineTo(P[b][0] + hj(50) * 110 * z, P[b][1] + 36 * z); ctx.lineTo(P[b][0] + hj(51) * 150 * z, P[b][1] + 74 * z); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(170,205,255,0.6)'; ctx.beginPath(); ctx.ellipse(X, Y, 34 * z, 14 * z, 0, 0, 6.3); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.lineCap = 'butt';
 }
 
 /* ===================== Герои на костях: кадры по фазам в трёх видах ===================== */
@@ -13412,7 +13479,7 @@ mergeStr(STR.ru, {
   rtTxt: { tarPour: 'смола разлита', fear: 'страх!', stun: 'оглушён', parry: 'Отбил!', reform: 'встаёт снова', trollUp: 'зарастает!' },
   rtYrs: '−{n} г. жизни',
   rtMsg: { wave: 'Из логова идут ещё', lichReform: 'Лич рассыпался — но встанет у филактерии. Разбейте её!', phylBroke: 'Филактерия разбита: лич больше не встанет', trollUp: 'Тролль зарастает. Добейте огнём!', parry: 'Отбит удар!', rockfall: 'Обвал! Дракон оглушён', yrsPaid: 'Узы заняты — подъём стоил {n} г. жизни', uzFull: 'Узы заняты: после боя можно отпустить мертвецов' },
-  rtHud: { focus: 'Сосредоточение', mana: 'Мана', uz: 'Узы {a}/{b}', under: 'под землёй {n}', auto: 'Сам', camF: 'Камера: за героем', camA: 'Камера: всё поле', start: 'В бой!', retreat: 'Отступить', pause: 'Пауза', go: 'Дальше', x2: '×2', paused: 'Пауза. Время стоит — умения и приказы работают', prep: 'Враги не ждут удара. Отряд готов. Ловушки — касанием по полю ({n}).', prepNo: 'Отряд готов.', noHero: 'Героя в отряде нет — бойцы бьются сами. Плечом к плечу они держат удар лучше; коснитесь врага — ударят все разом', heroDown: 'Герой пал — отряд бьётся сам', mend: 'Чинить мертвецов', draw: 'Рисуйте знак — время замедлено', tip: 'Касание по полю — идти или бить. Умения — кнопками', tipG: 'Касание по полю — идти или бить. Умения — кнопками или жестами', aim: 'Коснитесь поля: {a}', hold: 'Подержите кнопку — что она делает' },
+  rtHud: { focus: 'Сосредоточение', mana: 'Мана', uz: 'Узы {a}/{b}', under: 'под землёй {n}', auto: 'Сам', camF: 'Камера: за героем', camA: 'Камера: всё поле', wind: 'Ветер: {s}', windS: ['слабый', 'умеренный', 'сильный', 'гроза'], start: 'В бой!', retreat: 'Отступить', pause: 'Пауза', go: 'Дальше', x2: '×2', paused: 'Пауза. Время стоит — умения и приказы работают', prep: 'Враги не ждут удара. Отряд готов. Ловушки — касанием по полю ({n}).', prepNo: 'Отряд готов.', noHero: 'Героя в отряде нет — бойцы бьются сами. Плечом к плечу они держат удар лучше; коснитесь врага — ударят все разом', heroDown: 'Герой пал — отряд бьётся сам', mend: 'Чинить мертвецов', draw: 'Рисуйте знак — время замедлено', tip: 'Касание по полю — идти или бить. Умения — кнопками', tipG: 'Касание по полю — идти или бить. Умения — кнопками или жестами', aim: 'Коснитесь поля: {a}', hold: 'Подержите кнопку — что она делает' },
   rtTut2: { raise: 'На поле есть тела врагов. Нажмите «Поднять» и коснитесь тела — или «Поднять всех»', order: 'Ваши мертвецы рядом. Нажмите «В бой» и коснитесь врага — ударят все разом', ab: 'Нажмите умение, затем коснитесь цели. Знаки пальцем тоже работают. Справа — пауза' },
   rtCard: { lv: 'Уровень {n}', hp: 'Здоровье {a}/{b}', mp: 'Мана {a}/{b}', yrs: 'Лет осталось: {n}', uz: 'Узы: {a} из {b}', under: 'Ждут под землёй: {n}', gs: 'Жест: {g}', arts: 'Артефакты: {n}', back: 'Вернуться в бой' },
   rtTut: { war: 'Воин: нажмите приём внизу. Или знак пальцем: линия — Рассечь, круг — Вихрь.', mage: 'Маг: нажмите умение и коснитесь цели. Или знак: линия — шар, круг — Оберег.', necro: 'Некромант: «Поднять» и коснитесь тела. «В бой» и коснитесь врага.' }, rtTutB: { war: 'Воин: нажмите приём внизу. Рассечь — коснитесь, куда бить; Вихрь — сразу вокруг.', mage: 'Маг: нажмите умение и коснитесь цели.', necro: 'Некромант: «Поднять» и коснитесь тела. «В бой» и коснитесь врага.' },
@@ -13431,7 +13498,7 @@ mergeStr(STR.en, {
   rtTxt: { tarPour: 'tar poured', fear: 'fear!', stun: 'stunned', parry: 'Parried!', reform: 'rises again', trollUp: 'regrows!' },
   rtYrs: '−{n} years of life',
   rtMsg: { wave: 'More come out of the lair', lichReform: 'The lich crumbled — but will rise at the phylactery. Break it!', phylBroke: 'Phylactery broken: the lich will not rise again', trollUp: 'The troll regrows. Finish it with fire!', parry: 'Blow parried!', rockfall: 'Rockfall! The dragon is stunned', yrsPaid: 'No free bonds — the raising cost {n} years of life', uzFull: 'No free bonds: after the battle you can release some of the dead' },
-  rtHud: { focus: 'Focus', mana: 'Mana', uz: 'Bonds {a}/{b}', under: 'underground {n}', auto: 'Auto', camF: 'Camera: follow hero', camA: 'Camera: whole field', start: 'Attack!', retreat: 'Retreat', pause: 'Pause', go: 'Go on', x2: '×2', paused: 'Paused. Time stands still — abilities and orders work', prep: 'The foes are not expecting you. Traps — tap the field ({n}).', prepNo: 'The squad is ready.', noHero: 'No hero in the party — the squad fights on its own. Shoulder to shoulder they take blows better; tap a foe and they all strike it', heroDown: 'The hero has fallen — the squad fights on', mend: 'Mend the dead', draw: 'Draw a sign — time is slowed', tip: 'Tap the field to move or strike. Abilities — buttons', tipG: 'Tap the field to move or strike. Abilities — buttons or gestures', aim: 'Tap the field: {a}', hold: 'Hold a button to see what it does' },
+  rtHud: { focus: 'Focus', mana: 'Mana', uz: 'Bonds {a}/{b}', under: 'underground {n}', auto: 'Auto', camF: 'Camera: follow hero', camA: 'Camera: whole field', wind: 'Wind: {s}', windS: ['light', 'moderate', 'strong', 'storm'], start: 'Attack!', retreat: 'Retreat', pause: 'Pause', go: 'Go on', x2: '×2', paused: 'Paused. Time stands still — abilities and orders work', prep: 'The foes are not expecting you. Traps — tap the field ({n}).', prepNo: 'The squad is ready.', noHero: 'No hero in the party — the squad fights on its own. Shoulder to shoulder they take blows better; tap a foe and they all strike it', heroDown: 'The hero has fallen — the squad fights on', mend: 'Mend the dead', draw: 'Draw a sign — time is slowed', tip: 'Tap the field to move or strike. Abilities — buttons', tipG: 'Tap the field to move or strike. Abilities — buttons or gestures', aim: 'Tap the field: {a}', hold: 'Hold a button to see what it does' },
   rtTut2: { raise: 'There are foes’ bodies on the field. Press “Raise” and tap a body — or “Raise all”', order: 'Your dead are near. Press “Attack” and tap a foe — they strike together', ab: 'Press an ability, then tap the target. Finger signs work too. Pause is on the right' },
   rtCard: { lv: 'Level {n}', hp: 'Health {a}/{b}', mp: 'Mana {a}/{b}', yrs: 'Years left: {n}', uz: 'Bonds: {a} of {b}', under: 'Waiting underground: {n}', gs: 'Gesture: {g}', arts: 'Artifacts: {n}', back: 'Back to battle' },
   rtTut: { war: 'Warrior: press a move below. Or a finger sign: a line — Cleave, a circle — Whirl.', mage: 'Mage: press an ability and tap the target. Or a sign: a line — fireball, a circle — Ward.', necro: 'Necromancer: “Raise” and tap a body. “Attack” and tap a foe.' }, rtTutB: { war: 'Warrior: press a move below. Cleave — tap where to strike; Whirl — hits all around at once.', mage: 'Mage: press an ability and tap the target.', necro: 'Necromancer: “Raise” and tap a body. “Attack” and tap a foe.' },
@@ -13439,7 +13506,7 @@ mergeStr(STR.en, {
 });
 (function () { const st = document.createElement('style'); st.textContent = '.rt-bars{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}.rt-bar{height:6px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}.rt-bar b{display:block;height:100%;border-radius:4px}.rt-bar.hp b{background:#4cd07d}.rt-bar.mn b{background:#7aa8ff}.rt-bar.fc b{background:#ffd870}.rt-tag{font-size:12px;font-weight:700;color:#cfd3ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rt-tag i{font-style:normal;color:#7dffc8;margin-left:6px}'
   + '.bt-top .rt-pt{flex:0 0 auto;width:42px;height:42px;border-radius:12px;padding:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,226,122,.45);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.bt-top .rt-pt canvas{width:40px;height:40px}.bt-top .rt-pt em{position:absolute;right:1px;bottom:0;font-style:normal;font-size:10px;font-weight:800;color:#ffe27a;text-shadow:0 1px 2px #000}'
-  + '.rt-fl{position:absolute;display:flex;flex-direction:column;gap:7px;pointer-events:auto}.rt-fl button{width:40px;height:40px;border-radius:50%;background:rgba(14,16,30,.82);border:2px solid rgba(255,255,255,.3);color:#e8eaf6;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}.rt-fl button.on{border-color:var(--accent);background:rgba(255,226,122,.3);color:#fff}.rt-fl button canvas{width:22px;height:22px}'
+  + '.rt-fl{position:absolute;display:flex;flex-direction:column;gap:7px;pointer-events:auto}.rt-fl button{width:40px;height:40px;border-radius:50%;background:rgba(14,16,30,.82);border:2px solid rgba(255,255,255,.3);color:#e8eaf6;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}.rt-fl button.on{border-color:var(--accent);background:rgba(255,226,122,.3);color:#fff}.rt-fl button canvas{width:22px;height:22px}.rt-fl .rt-wind{width:40px;height:40px;border-radius:50%;background:rgba(14,16,30,.55);border:2px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;pointer-events:none}.rt-fl .rt-wind canvas{width:28px;height:28px}'
   + '.bt-bar.rt{gap:6px;padding:7px 8px 8px}.bt-bar.rt .bt-info{min-height:0;font-size:12.5px;line-height:1.25;display:block;max-height:48px;overflow:hidden}.bt-bar.rt .bt-info.aim{color:#ffe27a}.bt-bar.rt .bt-info.pz{color:#9fd8ff}'
   + '.bt-row.strip{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-bottom:2px;touch-action:none;overscroll-behavior:contain}.bt-row.strip::-webkit-scrollbar{display:none}'
   + '.rt-sw{position:relative;min-width:0;min-height:0}.rt-sw.s2 .bt-row.strip{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 40px),rgba(0,0,0,.25));mask-image:linear-gradient(90deg,#000 calc(100% - 40px),rgba(0,0,0,.25))}.rt-sw.s1 .bt-row.strip{-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.25),#000 40px);mask-image:linear-gradient(90deg,rgba(0,0,0,.25),#000 40px)}.rt-sw.s1.s2 .bt-row.strip{-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.25),#000 40px,#000 calc(100% - 40px),rgba(0,0,0,.25));mask-image:linear-gradient(90deg,rgba(0,0,0,.25),#000 40px,#000 calc(100% - 40px),rgba(0,0,0,.25))}'
@@ -13694,6 +13761,7 @@ function rtHudBuild0(B, h) {
   fb('speed', 'speed', R.speed === 2, () => { R.speed = R.speed === 2 ? 1 : 2; toast(R.speed === 2 ? '×2' : '×1'); });
   if (h && h.hp > 0) fb('auto', 'auto', R.auto, () => { R.auto = !R.auto; R.cmd = null; toast(T('rtHud').auto + (R.auto ? ' ✓' : ' ✗')); });
   if (typeof rtCamMode === 'function') fb('cam', rtCamMode() ? 'camF' : 'camA', false, () => { SV.set.rtCam = rtCamMode() ? 0 : 1; if (RTV.cam) { RTV.cam.uz = 0; RTV.cam.px = RTV.cam.py = 0; } toast(T('rtHud')[rtCamMode() ? 'camF' : 'camA']); saveSoon(); });      // запоминается: следующий бой начнётся так же
+  if (R.ws > 0.25 || R.storm) fl.appendChild(rtWindBadge(R));      /* флюгер: куда и как сильно дует (огонь, яд и стрелы — по ветру) */
   btEl.appendChild(fl);
   if (!h) { info.textContent = T('rtHud').noHero; return; }
   if (h.hp <= 0) { info.textContent = T('rtHud').heroDown; return; }
@@ -13768,6 +13836,13 @@ Object.defineProperty(DBGX, 'rtv', { get() { return { z: RTV.z, ox: RTV.ox, oy: 
 DBGX.rtCast = rtCast; DBGX.rtHurt = (u, d) => rtHurt(G.battle, u, d, null, {}); DBGX.RTU = RTU; DBGX.rtGo = rtGo; DBGX.rtAutoAll = rtAutoAll; DBGX.rtStart = rtStart;
 window.__art = () => DBGX_ART;
 DBGX.rtHurtO = (u, d, o) => rtHurt(G.battle, u, d, null, o || {}); DBGX.rtSteps = (n) => { const B = G.battle; for (let i = 0; i < n && !B.over; i++) rtStep(B, RTDT); }; DBGX.rtShown = rtShown; DBGX.elState = () => EL; DBGX.SV = SV;
+function rtWindBadge(R) {                                                       // флюгер под кнопками: стрелка — куда дует, засечки — сила
+  const d = el2('div', 'rt-wind'), c = document.createElement('canvas'); c.width = c.height = 56; const g = c.getContext('2d'), ca = Math.cos(R.wa), sa = Math.sin(R.wa) * 0.6, L = Math.hypot(ca, sa) || 1, ux = ca / L, uy = sa / L, k = R.storm ? 3 : R.ws > 0.75 ? 2 : R.ws > 0.5 ? 1 : 0;
+  g.translate(28, 28); g.strokeStyle = R.storm ? '#bcd6ff' : '#e8eaf6'; g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(-ux * 20, -uy * 20); g.lineTo(ux * 20, uy * 20); g.moveTo(ux * 20 - ux * 10 - uy * 9, uy * 20 - uy * 10 + ux * 9); g.lineTo(ux * 20, uy * 20); g.lineTo(ux * 20 - ux * 10 + uy * 9, uy * 20 - uy * 10 - ux * 9); g.stroke();
+  for (let i = 0; i < Math.min(3, k + 1); i++) { const bx = -ux * (20 - i * 8), by = -uy * (20 - i * 8); g.beginPath(); g.moveTo(bx, by); g.lineTo(bx - uy * 10 - ux * 4, by + ux * 10 - uy * 4); g.stroke(); }
+  d.appendChild(c); d.title = fill(T('rtHud').wind, { s: T('rtHud').windS[k] }); d.dataset.wind = k; return d;
+}
 
 /* ===================== Герой: годы, воля, артефакты, полубог — окна и строки ===================== */
 mergeStr(STR.ru, {
