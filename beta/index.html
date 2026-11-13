@@ -566,7 +566,7 @@ function workersOf(bid) { return G.people.filter(p => p.job === bid); }
 function staffed(type) { for (const b of G.b) if (active(b) && (b.type === type || b.type === type + '2') && workersOf(b.id).length) return true; return false; }
 function awayAll() { const o = G.land ? awayPeople() : []; if (G.world) for (const s of SIDS) { const sp = G.world.st[s].spy; if (sp) o.push(sp.p); } return o; }      // в походе или у соседа: в городе их нет, но место за ними
 function beds() { let n = 0; for (const b of G.b) if (active(b)) n += BDEF[b.type].beds || 0; return n; }
-function caps() { const c = { food: BASE_CAP.food, wood: BASE_CAP.wood, stone: BASE_CAP.stone, gold: BASE_CAP.gold, hide: 999, fang: 999, spear: 999, shield: 999, crys: 9999, trap: 99 }; c.food += 20 * (G.hallLv - 1); c.wood += 20 * (G.hallLv - 1); c.stone += 20 * (G.hallLv - 1); for (const b of G.b) if (active(b) && BDEF[b.type].cap) { const k = BDEF[b.type].cap; c.food += k.food; c.wood += k.wood; c.stone += k.stone; } return c; }
+function caps() { const c = { food: BASE_CAP.food, wood: BASE_CAP.wood, stone: BASE_CAP.stone, gold: BASE_CAP.gold, hide: 999, fang: 999, spear: 999, shield: 999, crys: 9999, trap: 99, tar: 99 }; c.food += 20 * (G.hallLv - 1); c.wood += 20 * (G.hallLv - 1); c.stone += 20 * (G.hallLv - 1); for (const b of G.b) if (active(b) && BDEF[b.type].cap) { const k = BDEF[b.type].cap; c.food += k.food; c.wood += k.wood; c.stone += k.stone; } return c; }
 function canPay(cost) { for (const k in cost) if (!(G.res[k] >= cost[k])) return false; return true; }
 function lack(cost) { const o = {}; for (const k in cost) if (!(G.res[k] >= cost[k])) o[k] = Math.ceil(cost[k] - (G.res[k] || 0)); return o; }
 function pay(cost) { for (const k in cost) G.res[k] -= cost[k]; }
@@ -2049,7 +2049,7 @@ function btAdd(B, s) { const u = Object.assign({ id: ++B.uid, x: -1, y: -1, mv: 
 function btFoe(B, k, o) { const M = MON[k], u = btAdd(B, Object.assign({ side: 1, k: k, hp: M.hp, d: M.d, mv: M.mv, rng: M.rng || 0, face: -1 }, o || {})); if (o && o.mul) { u.hp = Math.round(u.hp * o.mul); u.d = Math.round(u.d * (1 + (o.mul - 1) * 0.4)); } u.max = u.hp; return u; }
 /* o: { units: [{…}], foes: ['wolf', …] (первым — вожак), tr, night, calm (никто не ждёт удара), bait, traps, crys, undMax, seed } */
 function btNew(o) {
-  const B = { v: 1, rs: (o.seed >>> 0) || 1, g: [], fire: {}, trap: {}, u: [], uid: 0, round: 0, ph: 'deploy', over: null, night: !!o.night, tr: o.tr || 'plain', corp: [], loot: {}, killed: {}, xp: 0, fled: 0, broke: false, ev: [], res: [], noise: [], traps: o.traps | 0, crys: o.crys | 0, undMax: o.undMax | 0, n1: 0, lead: 0, amb: !!o.amb, auto: !!o.auto };
+  const B = { v: 1, rs: (o.seed >>> 0) || 1, g: [], fire: {}, trap: {}, u: [], uid: 0, round: 0, ph: 'deploy', over: null, night: !!o.night, tr: o.tr || 'plain', corp: [], loot: {}, killed: {}, xp: 0, fled: 0, broke: false, ev: [], res: [], noise: [], traps: o.traps | 0, tars: o.tars | 0, crys: o.crys | 0, undMax: o.undMax | 0, n1: 0, lead: 0, amb: !!o.amb, auto: !!o.auto };
   const D = TERR[B.tr] || TERR.plain;
   for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
     let t = 0; const r = btRnd(B);
@@ -2420,8 +2420,8 @@ function sendTrip(area, o) {                                // o: { kind: 'scout
   const hero = ps.find(p => p.hero), h = Math.max(1, Math.round(ROUTE[area].h * (typeof acadTravel === 'function' ? acadTravel() : 1))), food = tripFood(n, h) + (o.bait ? 8 : 0), fee = advs.reduce((s, a) => s + advFee(a), 0);
   if (G.res.food < food) return 'food'; if (G.res.gold < fee) return 'gold'; if (o.claim && G.res.wood < 20) return 'wood';
   G.res.food -= food; G.res.gold -= fee; if (o.claim) G.res.wood -= 20;
-  const traps = o.kind === 'scout' ? 0 : clamp(o.traps | 0, 0, Math.floor(G.res.trap)), crys = hero && o.kind !== 'scout' ? Math.min(3, Math.floor(G.res.crys)) : 0; G.res.trap -= traps; G.res.crys -= crys;
-  const kl = lairAt(area), t = { id: ++L.tid, kind: o.kind, to: area, ps: ps, adv: advs.map(a => a.id), und: [], st: 'go', total: h, left: h, bait: !!o.bait, claim: !!o.claim, traps: traps, crys: crys, loot: {}, t0: G.t, lid: kl && kl.known ? kl.id : 0, rep: { kind: o.kind, to: area, dead: [], battles: [], n: n } };
+  const traps = o.kind === 'scout' ? 0 : clamp(o.traps | 0, 0, Math.floor(G.res.trap)), crys = hero && o.kind !== 'scout' ? Math.min(3, Math.floor(G.res.crys)) : 0, tars = o.kind === 'scout' ? 0 : clamp(o.tars | 0, 0, Math.floor(G.res.tar || 0)); G.res.trap -= traps; G.res.crys -= crys; G.res.tar = (G.res.tar || 0) - tars;
+  const kl = lairAt(area), t = { id: ++L.tid, kind: o.kind, to: area, ps: ps, adv: advs.map(a => a.id), und: [], st: 'go', total: h, left: h, bait: !!o.bait, claim: !!o.claim, traps: traps, tars: tars, crys: crys, loot: {}, t0: G.t, lid: kl && kl.known ? kl.id : 0, rep: { kind: o.kind, to: area, dead: [], battles: [], n: n } };
   for (const p of ps) { if (o.kind !== 'scout' && !p.hero && !p.armed && G.res.spear >= 1) { G.res.spear--; p.armed = 'spear'; p.tripSpear = 1; } p.away = t.id; }
   if (hero && hero.hero === 'necro' && o.kind !== 'scout') { if (typeof undForTrip === 'function') undForTrip(t); else { t.und = G.und; G.und = []; } }
   if (o.kind !== 'scout' && typeof zooForTrip === 'function') zooForTrip(t);      // прирученные звери идут с отрядом
@@ -2478,7 +2478,7 @@ function tripHome(t) {
   if (typeof zooBack === 'function') zooBack(t);      // прирученные звери — домой
   for (const id of t.adv) { const a = advById(id); if (a) { a.busy = null; a.done++; if (typeof advMerit === 'function') advMerit(a, t); } }
   const c = caps(), got = {}; for (const k in t.loot) { let v = Math.round(t.loot[k]); if (!(v > 0)) continue; if (c[k] != null && c[k] < 900) v = Math.max(0, Math.min(v, c[k] - G.res[k])); G.res[k] = (G.res[k] || 0) + v; if (G.today[k] != null) G.today[k] += v; got[k] = v; }
-  G.res.trap += t.traps; G.res.crys += t.crys;
+  G.res.trap += t.traps; G.res.crys += t.crys; if (t.tars) G.res.tar = (G.res.tar || 0) + t.tars;      // нерастраченная смола — домой
   if (t.herb && typeof herbAdd === 'function') herbAdd(3);
   if (t.herb) { let n = 0; for (const p of G.people) if (p.sick > 0) { p.sick = 0; p.imm = true; n++; } R.cured = n; G.herbT = G.t + 24 * 12; }
   if (t.finds && t.finds.length) { if (R.greedy) { t.finds.forEach(id => { G.leg.it[id] = { st: 'sealed', sec: 1, day: G.day }; legSteal(id); }); R.kept = t.finds; } else { R.finds = t.finds.slice(); legArrive(t.finds); } }
@@ -2550,8 +2550,8 @@ function startBattle(t, l, amb) {
   if (t.zoo && t.zoo.length && typeof zooUnits === 'function') for (const z of zooUnits(t, Math.max(0, (RT_ON ? 16 : 12) - units.length))) units.push(z);      // прирученные звери — в строй
   if (!units.length) { t.und = t.und.concat(t.undRest); t.undRest = null; tripBack(t); return null; }
   const hero = t.ps.find(p => p.hero), night = G.hour >= 20 || G.hour < 5;
-  const B = btNew({ units: units, foes: lairUnits(l), tr: AREAS[amb ? l.area : t.to].tr, night: night, alert: l.alert > G.t, amb: amb, bait: t.bait && !amb, traps: amb ? 0 : t.traps, crys: t.crys, undMax: hero && hero.hero === 'necro' ? uzCap : 0, cap: RT_ON ? 16 : 12, seed: (Math.random() * 1e9) | 0 });
-  if (!amb) { t.bait = false; B.trapsIn = t.traps; } if (nh) B.uzOut = Math.max(0, uzAll - uzIn);      // узы тех, кто не в этом бою: дома, в обозе, в других походах
+  const B = btNew({ units: units, foes: lairUnits(l), tr: AREAS[amb ? l.area : t.to].tr, night: night, alert: l.alert > G.t, amb: amb, bait: t.bait && !amb, traps: amb ? 0 : t.traps, tars: amb ? 0 : (t.tars || 0), crys: t.crys, undMax: hero && hero.hero === 'necro' ? uzCap : 0, cap: RT_ON ? 16 : 12, seed: (Math.random() * 1e9) | 0 });
+  if (!amb) { t.bait = false; B.trapsIn = t.traps; t.tars = 0; }      /* смолу разливают в этом бою — домой не вернётся */ if (nh) B.uzOut = Math.max(0, uzAll - uzIn);      // узы тех, кто не в этом бою: дома, в обозе, в других походах
   if (hero && hero.lord) { B.lord = true; B.lordMul = 1 + 0.12 * hero.lv; for (const u of B.u) if (u.und) { u.d = Math.round(u.d * B.lordMul); } }
   if (l.kind === 'ancient' && pactOn()) { G.leg.it.pact.st = 'broken'; G.leg.wrath = true; log('pactBroken'); }
   B.tid = t.id; B.lid = l.id; t.st = 'hold'; G.battle = B;
@@ -2673,7 +2673,8 @@ function drakeStep(e, dt, r) {                              // дракон: л�
   if (d > 60) { const m = Math.min(d, T.spd * dt); e.x += dx / d * m; e.y += dy / d * m; e.face = dx > 0 ? 1 : -1; e.walk = (e.walk || 0) + dt * 10; return; }
   e.cd -= dt; if (e.cd <= 0) { e.cd = T.cd; e.hit = G.t; fx('bolt', e.x, e.y - 30, { x: b.x, y: b.y - 10, k: 'fire' }); fx('fire', b.x, b.y); startFire(b); e.burns = (e.burns || 0) + 1; e.tb = null; for (const p of G.people) if (!p.dead && inSight(p) && hyp(p.x - b.x, p.y - b.y) < 55) hitP(p, T.dmg, e); }
 }
-function landCraft(p, b, dt) { if (G.trapOn && G.res.trap < 6 && G.res.wood >= 3) { b.prog = (b.prog || 0) + eff(p, 'craft') * dt / 8; if (b.prog >= 1) { b.prog -= 1; G.res.trap++; G.res.wood -= 3; ev('pop', b, 'trap'); } } }
+function landCraft(p, b, dt) { if (G.trapOn && G.res.trap < 6 && G.res.wood >= 3) { b.prog = (b.prog || 0) + eff(p, 'craft') * dt / 8; if (b.prog >= 1) { b.prog -= 1; G.res.trap++; G.res.wood -= 3; ev('pop', b, 'trap'); } }
+  else if (G.tarOn && (G.res.tar || 0) < 4 && G.res.wood >= 4) { b.prog = (b.prog || 0) + eff(p, 'craft') * dt / 12; if (b.prog >= 1) { b.prog -= 1; G.res.tar = (G.res.tar || 0) + 1; G.res.wood -= 4; ev('pop', b, 'tar'); } } }      /* 13.11: смола — бочонок из 4 дерева, не больше 4; варят, когда капканы не нужны */
 /* ---------- гильдия авантюристов ---------- */
 function guildOn() { return staffed('guild'); }
 function advCap() { return 2 + (G.tavernOn ? 1 : 0) + (G.hallLv >= 3 ? 1 : 0) + (G.land.cleared >= 2 ? 1 : 0) + (G.guild ? G.guild.lv - 1 : 0); }
@@ -2788,7 +2789,7 @@ function stewScout() {                                      // управляю�
   const c = G.people.filter(p => canGo(p) && !special(p) && !isDefJob(p.job)).sort((x, y) => y.sk.fight - x.sk.fight)[0]; if (!c) return false;
   if (sendTrip(a, { kind: 'scout', pids: [c.id] }) !== 'ok') return false; did('scout', AREAS[a].k); return true;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { AREAS, LINKS, ROUTE, LAIR, areaSide, areaNb, landInit, mkLair, lairAt, lairById, lairUnits, lairPow, lairSleeps, explore, sendTrip, tripFood, tripById, advById, advNew, advFee, advPow, postQuest, cancelQuest, questMin, questTake, landDaily, landHourly, tripTick, startBattle, endBattle, landType, raidLair, landHas, guildOn, awayHero, awayPeople, removeB, removeInfo, canGo, hitE, hitP });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { landCraft, AREAS, LINKS, ROUTE, LAIR, areaSide, areaNb, landInit, mkLair, lairAt, lairById, lairUnits, lairPow, lairSleeps, explore, sendTrip, tripFood, tripById, advById, advNew, advFee, advPow, postQuest, cancelQuest, questMin, questTake, landDaily, landHourly, tripTick, startBattle, endBattle, landType, raidLair, landHas, guildOn, awayHero, awayPeople, removeB, removeInfo, canGo, hitE, hitP });
 
 /* ===================== Слой 6: наследие древних — находки с ценой, ступени тайны, владыка павших (без DOM) ===================== */
 /* rate — как быстро расходится молва (ступеней в день, пока наследие в деле); back — можно снова запечатать; phys — вещь, которую можно украсть и продать */
@@ -4075,6 +4076,7 @@ function rtStep(B, dt) {
     for (const u of B.u) { if (u.hp <= 0 || u.out || u.px == null) { u.inF = 0; continue; } let hot = u.inF; u.inF = 0;
       if (!hot && E && E.cnt && !u.inside && !btM(u).fly) { const i = elCellAt(E, u.px, u.py); hot = i >= 0 && E.fire[i] >= 5; }
       if (hot) { u.fx = (u.fx || 0) + dt; if (u.fx >= 0.7) { u.s.burn = Math.max(u.s.burn || 0, 1.2); if (btM(u).regen) u.burnT = R.t + 6; } } else if (u.fx) u.fx = Math.max(0, u.fx - dt * 1.5);
+      if (E && !u.inside && !btM(u).fly) { const i = elCellAt(E, u.px, u.py); if (i >= 0 && E.tar[i] > 40) u.s.slow = Math.max(u.s.slow || 0, 0.2); }      /* в смоле вязнут */
       if (E && (E.gasOn || E.cnt) && !u.inside) { const i = elCellAt(E, u.px, u.py); if (i < 0) continue;      /* яд: простоял в облаке ~0,5 с — отравлен, раны не затягиваются; вспышка сгорающего яда обжигает */
         if (E.gasOn && E.gas[i] >= 70 && !elGasFree(u)) { u.gx = (u.gx || 0) + dt; if (u.gx >= 0.5) { u.pd = Math.max(u.pd || 0, E.gas[i] > 150 ? 2 : 1); u.pdN = Math.max(u.pdN || 0, 2); if (!(u.pdT > 0)) u.pdT = 1; u.s.curse = Math.max(u.s.curse || 0, 1); u.psnT = R.t + 2; } } else if (u.gx) u.gx = Math.max(0, u.gx - dt * 1.5);
         if (E.flm[i] && E.tick - E.flm[i] <= 1 && R.t - (u.flashT || -9) > 0.6 && !btM(u).fly) { u.flashT = R.t; rtHurt(B, u, 5 * RTK, null, { fire: 1, magic: 1 }); u.s.burn = Math.max(u.s.burn || 0, 1.2); if (btM(u).regen) u.burnT = R.t + 6; } } } }
@@ -4299,6 +4301,7 @@ function rtMoveTo(B, u, x, y, dt) {
   let dx = x - u.px, dy = y - u.py; const d = Math.hypot(dx, dy); if (d < 2) { u.an = 'idle'; u.vx = u.vy = 0; return; }
   dx /= d; dy /= d; let sp = u.sp * (u.s.slow ? 0.5 : 1) * (u.s.haste ? 1.3 : 1); const z = rtZone(B, u.px, u.py);
   if ((z === 'swamp' || z === 'water') && !M.fly) sp *= 0.55;
+  if (!M.fly && typeof EL !== 'undefined' && EL && EL.B === B && EL.rubN) { const i = elCellAt(EL, u.px, u.py); if (i >= 0 && EL.rub[i] > 120) sp *= 0.75; }      /* по щебню медленнее (пыль вокруг — нет) */
   if (u.side === 0 && u.und) { const h = rtHeroU(B); if (h && rtD(u, h) < rtAura(B, h)) sp *= 1.2; }
   const st = Math.min(d, sp * dt); u.px += dx * st; u.py += dy * st; u.vx = dx * sp; u.vy = dy * sp; u.an = 'run'; if (Math.abs(dx) > 0.15) u.face = dx > 0 ? 1 : -1;
 }
@@ -4350,6 +4353,10 @@ function rtTeleHit(B, T0) {
   else if (T0.meteor) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r }); B.rt.zn.push({ x: T0.x - 60, y: T0.y - 60, w: 120, h: 120, k: 'fire', t1: 3 }); }
   else if (T0.k === 'cone' && T0.frost) { rtFx(B, { k: 'frostcone', x: T0.x, y: T0.y, a: T0.a, len: T0.len, half: T0.half, dur: 0.05 }); rtDouse(B, (x, y) => rtInTele(T0, { px: x, py: y, r: 0 }), 0, T0.side); }      /* ледяная волна: иней по клину, огонь в нём гаснет */
   else if (T0.k === 'circle') rtFx(B, { k: T0.stun ? 'scream' : 'slam', x: T0.x, y: T0.y, r: T0.r, dur: 0.5 });
+  if (T0.crack && typeof elCrackAt === 'function') elCrackAt(B, T0.x, T0.y, T0.r * 0.8);      /* топот трескает землю */
+  if (T0.rock) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r }); if (typeof elRubbleAt === 'function') elRubbleAt(B, T0.x, T0.y, T0.r * 0.75, 0.7); const R1 = B.rt; R1.dec = R1.dec || []; R1.dec.push({ k: 'stones', x: T0.x, y: T0.y, r: T0.r * 0.55, n: 5, s: Math.round(T0.x * 7 + T0.y * 13), t: R1.t }); }      /* упавший камень — щебень */
+  if (T0.quake && T0.by) { const a = btU(B, T0.by); if (a && typeof elCrackAt === 'function') elCrackAt(B, a.px, a.py + 10, 115); for (let i = 0; i < 3; i++) { const fs2 = B.u.filter(q => q.side !== T0.side && q.hp > 0 && !q.out && q.px != null), f = fs2[(rtR(B) * fs2.length) | 0], x = clamp((f ? f.px : RTW / 2) + (rtR(B) - 0.5) * 220, 30, RTW - 30), y = clamp((f ? f.py : RTH / 2) + (rtR(B) - 0.5) * 160, 30, RTH - 20);
+      B.rt.tele.push({ k: 'circle', x: x, y: y, r: 42, t0: B.rt.t, t1: B.rt.t + 1.1 + i * 0.3, by: T0.by, side: T0.side, mul: 0.2, rock: 1 }); } }      /* землетрясение: с высоты сыплются камни — место видно заранее */
   for (const u of B.u) {
     if (u.side === T0.side || u.hp <= 0 || u.out) continue; if (!rtInTele(T0, u)) continue; const side2 = T0.swing && T0.one && u.id !== T0.tid; if (side2 && !T0.sw) continue;
     if (u.s.parry || (u.standUp && B.rt.t - u.standUp < 0.35)) { rtParry(B, u, a); continue; }
@@ -4445,7 +4452,7 @@ function rtCast(B, ab, p) {
 }
 function rtRockHit(B, ob, u) {                              // камень на гряде: удар — и обвал на того, кто рядом
   ob.hp = (ob.hp || 3) - 1; rtFx(B, { k: 'crack', x: ob.x, y: ob.y, dur: 0.5 });
-  if (ob.hp > 0) return; ob.k = 'rubble'; rtFx(B, { k: 'boom', x: ob.x, y: ob.y, r: 70 });
+  if (ob.hp > 0) return; ob.k = 'rubble'; rtFx(B, { k: 'boom', x: ob.x, y: ob.y, r: 70 }); if (typeof elRubbleAt === 'function') elRubbleAt(B, ob.x, ob.y, 72);      /* валун разлетелся щебнем */
   for (const f of rtFoes(B, u)) if (Math.hypot(f.px - ob.x, f.py - ob.y) < 90 + f.r) { rtHurt(B, f, Math.round(btM(f).fly && btM(f).scale ? f.max * 0.15 : 30 * RTK), u, {}); f.s.stun = btM(f).scale ? 4 : 2; if (f.k === 'dragon' || f.k === 'drake' || f.k === 'ancient') rtMsg(B, 'rockfall'); }
 }
 /* ---------- некромант: подъём, призыв, свита под землёй ---------- */
@@ -4502,7 +4509,7 @@ function rtAutoAll(B, secs) {
   while (!B.over && g++ < lim) rtStep(B, RTDT);
   if (!B.over) rtEnd(B, 'retreat'); return B.over;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtBoom, rtDouse, rtGust, rtInTele, rtLos, rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { rtBoom, rtDouse, rtGust, rtInTele, rtLos, rtRockHit, rtMoveTo, rtMass, rtSwingT, rtAtkFrame, rtImpact, rtPush, rtNudge, rtAttack, rtThink, BST_T, BST_M, bstAdv, rtNorm, RTC, RTW, RTH, RTAB, RT_ON, uzOf, rtStart, rtGo, rtTick, rtStep, rtCast, rtCan, rtAutoAll, rtRetreat, rtHeroU, rtUzFree, rtUzUsed, rtLive, rtRaiseCorpse, rtSummon, rtAura });
 
 /* ===================== Жесты: что нарисовал палец (без DOM) ===================== */
 /* По росчерку на экране — вид жеста: касание, удержание, линия, круг, дуга, зигзаг, спираль, галка.
@@ -4896,7 +4903,7 @@ function bossReform(B, u) {                                 // феникс: п�
 function bossAct(B, u, near, dt) {
   const R = B.rt, fs = near, t = fs[0]; if (!t) return false; const dd = rtD(u, t), k = u.k, en = u.side === 1 && !u.und;
   if (en && !R.bossDone) bossStart(B);
-  if (k === 'golem') { if (fs.some(f => rtD(f, u) < 150) && rtCd(B, u, 'stomp', 9)) { R.tele.push({ k: 'circle', x: u.px, y: u.py, r: 140, t0: R.t, t1: R.t + 0.9, by: u.id, side: u.side, stun: 1.6, mul: 1 }); u.an = 'cast'; u.at = 0; return true; } return false; }
+  if (k === 'golem') { if (fs.some(f => rtD(f, u) < 150) && rtCd(B, u, 'stomp', 9)) { R.tele.push({ k: 'circle', x: u.px, y: u.py, r: 140, t0: R.t, t1: R.t + 0.9, by: u.id, side: u.side, stun: 1.6, mul: 1, crack: 1 }); u.an = 'cast'; u.at = 0; return true; } return false; }
   if (k === 'hag') {
     if (rtCd(B, u, 'curse', 11)) { const h = fs.find(f => f.hero) || t; h.s.curse = 8; rtFx(B, { k: 'txt', x: h.px, y: h.py - 40, s: 'curse' }); u.an = 'cast'; u.at = 0; return true; }
     if (rtCd(B, u, 'leech', 14)) { for (let i = 0; i < 2; i++) bossSum(B, u, 'leech', t.px + (i ? 30 : -30), t.py + 20); u.an = 'cast'; u.at = 0; return true; }
@@ -5977,6 +5984,10 @@ if (typeof module !== 'undefined' && module.exports) Object.assign(module.export
    Яд (13.11): тяжёлое облако Болотной карги и Гидры — расползается, стекает в топь и с холмов, сносится ветром, со временем рассеивается;
    лужи и иней его прибивают; огонь поджигает: облако сгорает вспышкой (обжигает всех в ней). Кто простоял в облаке ~0,5 с — травится,
    раны не затягиваются (мертвецам, духам и бездушным вещам яд нипочём; летуны над ним).
+   Смола (13.11): бочонки из похода разливают перед строем; в смоле вязнут (вдвое медленнее); любой огонь — в любую погоду —
+   превращает её в стену пламени: смола горит жарко и долго (~5 с), огонь бежит по ней быстро.
+   Камень (13.11): разбитый валун разлетается щебнем, топот голема трескает землю, землетрясение колосса роняет камни (место видно заранее);
+   по щебню идут медленнее (×0,75).
    Состояние живёт вне боя (в сохранение не попадает), случай — свой (игровой Math.random не трогаем).
    М2: иней и вода. Стужа мага, глыбы и волна Ледяной ведьмы покрывают траву инеем; иней тает в лужу, лужа высыхает.
    Огонь на инее и в луже не загорается сразу — сперва шипит паром; лёд гасит огонь (в бою — rtDouse, зона гаснет по-настоящему);
@@ -5986,7 +5997,7 @@ let EL = null;
 function elRnd(E) { let s = E.seed; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; E.seed = (s >>> 0) || 1; return E.seed / 4294967296; }
 function elInit(B, snow) {
   const R = B.rt, w = Math.ceil(RTW / ELC), h = Math.ceil(RTH / ELC), n = w * h;
-  const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), frost: new Uint8Array(n), wet: new Uint8Array(n), inl: new Uint8Array(n), gas: new Uint8Array(n), gas2: new Float32Array(n), hi: new Uint8Array(n), flm: new Uint32Array(n), gasOn: 0, gdirty: 0, zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
+  const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), frost: new Uint8Array(n), wet: new Uint8Array(n), inl: new Uint8Array(n), gas: new Uint8Array(n), gas2: new Float32Array(n), tar: new Uint8Array(n), rub: new Uint8Array(n), rubN: 0, hi: new Uint8Array(n), flm: new Uint32Array(n), gasOn: 0, gdirty: 0, zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
     t: R.t, acc: 0, tick: 0, bursts: [], seen: new WeakSet(), steam: [], gusts: [], ices: new Map(), fw: 0, seed: ((((B.tid || 1) + 7) * 2654435761) ^ 0x9e3779b9) >>> 0 || 1, wind: 0, dirty: 0, zn: 0, snow: !!snow };
   { const a = elRnd(E) * Math.PI * 2, sw = (B.tr === 'steppe' || B.tr === 'plain' || B.tr === 'meadow' || B.tr === 'hills' ? 0.45 : B.tr === 'forest' ? 0.2 : 0.3) + elRnd(E) * 0.55;      // ветер боя: направление и сила (в лесу тише, в степи сильнее)
     E.wx = Math.cos(a) * sw; E.wy = Math.sin(a) * sw * 0.6; E.wind = E.wx; }
@@ -6008,6 +6019,7 @@ function elSteam(E, i) { if (E.steam.length < 80) E.steam.push(i); }
 function elPatch(E, cx, cy, rx, ry, st, flash) {      // flash — вспышка (взрыв шара, струя дракона): траву поджигает слабым огнём, дальше она горит по своей сухости                                         // пятно огня — овал с рваной кромкой (в клетках): метит клетки «в огне» и разжигает их
   const w = E.w, h = E.h, fire = E.fire, fuel = E.fuel, zone = E.zone, frost = E.frost, wet = E.wet, x0 = Math.max(0, Math.floor(cx - rx - 1)), x1 = Math.min(w - 1, Math.ceil(cx + rx + 1)), y0 = Math.max(0, Math.floor(cy - ry - 1)), y1 = Math.min(h - 1, Math.ceil(cy + ry + 1));
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * w + x, ex = (x + 0.5 - cx) / rx, ey = (y + 0.5 - cy) / ry; if (ex * ex + ey * ey > 0.8 + elHash(i) * 0.4) continue; if (!flash) zone[i] = st;
+    if (E.tar[i] > 40) { if (fire[i] < 6 && elRnd(E) < 0.6) elLight(E, i, 8); continue; }      // смола занимается от любого огня, в любую погоду
     if (frost[i]) { frost[i] = 0; if (wet[i] < 170) wet[i] = 170; E.fw = 1; E.dirty = 1; if (elRnd(E) < 0.35) elSteam(E, i); continue; }      // иней под огнём тает в лужу — с шипением
     if (wet[i] === 255) { if (elRnd(E) < 0.04) elSteam(E, i); continue; }                       // топь и вода: огонь только парит
     if (wet[i] > 30) { wet[i] -= 18; E.dirty = 1; if (elRnd(E) < 0.22) elSteam(E, i); continue; }      // лужа выкипает, и только потом трава займётся
@@ -6044,6 +6056,30 @@ function elGasStep(E) {                                                         
   for (let i = 0; i < E.n; i++) { const v = o[i]; const c = v >= 255 ? 255 : v < 1.5 ? 0 : v | 0; g[i] = c; if (c) any = 1; }
   E.gasOn = any; E.gdirty = 1;
 }
+function elTarPour(E, cx, cy, rx, ry) {                                          // лужа смолы (в клетках): густая в середине, рваный край
+  const w = E.w, h = E.h, T = E.tar; for (let y = Math.max(0, Math.floor(cy - ry - 1)); y <= Math.min(h - 1, Math.ceil(cy + ry + 1)); y++) for (let x = Math.max(0, Math.floor(cx - rx - 1)); x <= Math.min(w - 1, Math.ceil(cx + rx + 1)); x++) {
+    const i = y * w + x, ex = (x + 0.5 - cx) / rx, ey = (y + 0.5 - cy) / ry, e = ex * ex + ey * ey; if (e > 0.75 + elHash(i + 11) * 0.5 || E.wet[i] === 255) continue; T[i] = Math.max(T[i], (230 - e * 60) | 0); }
+  E.dirty = 1;
+}
+function elTarLine(B, E) {                                                        // смола из похода: разлить перед своим строем, поперёк пути врага
+  const R = B.rt, n = Math.min(4, B.tars | 0); R.tarDone = 1; if (!n) return; const my = B.u.filter(u => u.side === 0 && u.hp > 0 && !u.out && u.px != null); if (!my.length) return;
+  const fy = Math.min(...my.map(u => u.py)), cx = my.reduce((a, u) => a + u.px, 0) / my.length, y = Math.max(50, fy - 150);      /* в шагах трёх перед строем: враг вязнет, не дойдя */
+  for (let k = 0; k < n; k++) { const x = Math.max(60, Math.min(RTW - 60, cx + (k - (n - 1) / 2) * 92)); elTarPour(E, x / ELC, y / ELC, 54 / ELC, 32 / ELC); }
+  if (typeof rtFx === 'function') rtFx(B, { k: 'txt', x: cx, y: y - 20, s: 'tarPour', dur: 1.4 });
+}
+function elRubble(E, cx, cy, r, dense) {                                         // щебень россыпью (в клетках): камни погуще в середине
+  const w = E.w, h = E.h, U = E.rub; for (let y = Math.max(0, Math.floor(cy - r - 1)); y <= Math.min(h - 1, Math.ceil(cy + r + 1)); y++) for (let x = Math.max(0, Math.floor(cx - r - 1)); x <= Math.min(w - 1, Math.ceil(cx + r + 1)); x++) {
+    const i = y * w + x, d = Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.25) / r; if (d > 1 || E.wet[i] === 255) continue; if (elRnd(E) < (dense || 0.75) * (1 - d * 0.6)) U[i] = Math.max(U[i], 130 + ((elRnd(E) * 110) | 0)); else if (d < 0.8 + elHash(i + 5) * 0.2) U[i] = Math.max(U[i], 104); }      /* пыльное пятно сплошное, комья — вразброс */
+  E.rubN = 1; E.dirty = 1;
+}
+function elCrack(E, cx, cy, r) {                                                  // трещины от удара: ломаные лучи от середины, в середине — крошево
+  const w = E.w, h = E.h, U = E.rub, n = 6 + ((elRnd(E) * 3) | 0);
+  for (let k = 0; k < n; k++) { let a = k / n * Math.PI * 2 + elRnd(E) * 0.6, x = cx, y = cy; const L = r * (0.55 + elRnd(E) * 0.45);
+    for (let s = 0; s < L; s += 0.7) { a += (elRnd(E) - 0.5) * 0.5; x += Math.cos(a) * 0.7; y += Math.sin(a) * 0.55; const ix = Math.floor(x), iy = Math.floor(y); if (ix < 0 || iy < 0 || ix >= w || iy >= h) break; const i = iy * w + ix; if (U[i] < 60) U[i] = 60; } }
+  elRubble(E, cx, cy, Math.max(1.5, r * 0.18), 0.6);
+}
+function elRubbleAt(B, x, y, r, dense) { const E = elGet(B); if (E) elRubble(E, x / ELC, y / ELC, r / ELC, dense); }
+function elCrackAt(B, x, y, r) { const E = elGet(B); if (E) elCrack(E, x / ELC, y / ELC, r / ELC); }
 function elDry(E) {                                                               // раз в 0,2 с: иней тает в лужу, лужа сохнет (зимой медленнее)
   const n = E.n, frost = E.frost, wet = E.wet, fm = E.snow ? 2 : 5, wm = E.snow ? 1 : 2; let any = 0;
   for (let i = 0; i < n; i++) { const f = frost[i], v = wet[i];
@@ -6068,13 +6104,15 @@ function elTick(E) {
   for (let j = 0; j < n0; j++) { const i = E.list[j]; let f = fire[i]; if (f === 0) { E.inl[i] = 0; continue; }      // 2. горящие клетки: едят траву, разгораются, перекидываются на соседнюю траву
     if (ash[i] < 250) { ash[i] = Math.min(250, ash[i] + (fuel[i] > 0 ? 14 : 5)); E.dirty = 1; }
     const inZ = zone[i] === st;
-    const capG = (8 + elHash(i + 77) * 8) * E.flK, cap = inZ ? Math.max(10 + elHash(i + 77) * 5, capG) : capG;      /* в зоне — колдовской огонь в полный рост; сама трава: зелёная и сырая тлеет низко, сухая горит в рост */
-    if (fuel[i] > 0) { fuel[i]--; if (f < cap) f++; else if (f > cap + 1) f--; else if (cap < 2) f = 0; }      // зона кончилась — пламя оседает до того, что держит трава; сырая, что вовсе не держит, гаснет
+    const TR = E.tar[i], capG = TR > 0 ? 15 : (8 + elHash(i + 77) * 8) * E.flK, cap = inZ ? Math.max(10 + elHash(i + 77) * 5, capG) : capG;      /* горящая смола — в полный рост */      /* в зоне — колдовской огонь в полный рост; сама трава: зелёная и сырая тлеет низко, сухая горит в рост */
+    if (TR > 0) { E.tar[i] = TR > 3 ? TR - 3 : 0; if (f < 15) f += 2; if (f > 15) f = 15; E.dirty = 1; }      // смола выгорает (~4 с), трава под ней пока цела
+    else if (fuel[i] > 0) { fuel[i]--; if (f < cap) f++; else if (f > cap + 1) f--; else if (cap < 2) f = 0; }      // зона кончилась — пламя оседает до того, что держит трава; сырая, что вовсе не держит, гаснет
     else if (inZ) { if (f < 9) f++; else if (elRnd(E) < 0.3) f--; }      // колдовской огонь зоны держится, пока зона жива (она и жжёт), даже когда трава под ним прогорела
     else f = f > 1 ? f - 1 : 0;                                           // трава выгорела — угли гаснут
-    if (f >= 5 && dry > 0.05) for (let a = 0; a < 2; a++) {             // огонь перекидывается: по ветру охотно, против — нехотя; сухая трава — быстрее
+    if (f >= 5 && (dry > 0.05 || TR > 0)) for (let a = 0; a < (TR > 0 ? 3 : 2); a++) {             // огонь перекидывается: по ветру охотно, против — нехотя; сухая трава — быстрее
       const d = (elRnd(E) * 8) | 0, dx = ELDX[d], dy = ELDY[d], x = i % w + dx, y = ((i / w) | 0) + dy; if (x < 0 || y < 0 || x >= w || y >= h) continue;
-      const q = y * w + x; if (fire[q] || fuel[q] === 0 || wet[q] > 20 || frost[q]) continue;
+      const q = y * w + x; if (!fire[q] && E.tar[q] > 40) { if (elRnd(E) < 0.45) elLight(E, q, 6); continue; }      // по смоле огонь бежит быстро
+      if (fire[q] || fuel[q] === 0 || wet[q] > 20 || frost[q]) continue;
       const wf = Math.max(0.06, Math.min(4, 1 + 4 * (dx * wx + dy * wy) * (dx && dy ? 0.7071 : 1)));      /* по ветру — в разы охотнее, против — почти никак */
       if (elRnd(E) < 0.09 * E.dryK * wf * f / 15) elLight(E, q, 2); }      /* dryK = сухость²: зелёная весенняя трава почти не держит огонь, сухая летняя — держит */
     fire[i] = f; if (f > 0) E.list[k++] = i; else E.inl[i] = 0; }
@@ -6098,17 +6136,19 @@ function elTick(E) {
 function elNeed(B) {                                                              // есть ли в бою хоть что-то для сетки: огонь, стужа, лёд (иначе сетку и не заводим)
   const R = B.rt; for (const z of R.zn) if (elZoneOn(z)) return true; for (const o of R.ob) if (o.k === 'ice') return true;
   if (R.fx) for (const f of R.fx) if ((f.k === 'boom' && f.fire) || f.k === 'ice' || f.k === 'frostcone') return true;
-  if (R.dec) for (const d of R.dec) if (d.br) return true; if (R.fx) for (const f of R.fx) if (f.k === 'miasma' || f.k === 'venomcone') return true; return false;
+  if (B.tars > 0 && !R.tarDone && R.ph === 'run') return true; if (R.dec) for (const d of R.dec) if (d.br) return true; if (R.fx) for (const f of R.fx) if (f.k === 'miasma' || f.k === 'venomcone') return true; return false;
 }
 function elSim(B, dt) {                                                           // шаг боя (rtStep): сетка идёт вместе с боем — пауза, замедление, автобой, проверки без экрана
   if (!B || !B.rt) return null; let E = EL && EL.B === B ? EL : null; if (!E) { if (!elNeed(B)) return null; E = elGet(B); E.t = B.rt.t; }
+  if (B.tars > 0 && !B.rt.tarDone && B.rt.ph === 'run') elTarLine(B, E);
   E.acc += dt * ELHZ; let n = 0; while (E.acc >= 1 && n < 8) { elTick(E); E.acc -= 1; n++; elBurnUnits(E); } if (E.acc > 1) E.acc = 0; E.t = B.rt.t; return E;
 }
 function elCellAt(E, x, y) { const cx = Math.floor(x / ELC), cy = Math.floor(y / ELC); return cx < 0 || cy < 0 || cx >= E.w || cy >= E.h ? -1 : cy * E.w + cx; }
 function elBurnUnits(E) {                                                         // горящий зверь роняет искры в траву под собой (сам жар от пламени копится в rtStep — загораются не сразу)
   const B = E.B, R = B.rt;
   for (const u of B.u) { if (u.hp <= 0 || u.out || u.px == null || u.inside) continue; const M = btM(u); if (M.fly) continue; const i = elCellAt(E, u.px, u.py); if (i < 0) continue;
-    if (u.s.burn && E.fuel[i] > 0 && !E.fire[i] && E.wet[i] <= 20 && !E.frost[i] && E.dry > 0.05 && elRnd(E) < 0.04 * E.dry) elLight(E, i, 3); }
+    if (u.s.burn && !E.fire[i] && E.tar[i] > 40 && elRnd(E) < 0.3) elLight(E, i, 6);      // горящий в смоле — смола вспыхивает
+    else if (u.s.burn && E.fuel[i] > 0 && !E.fire[i] && E.wet[i] <= 20 && !E.frost[i] && E.dry > 0.05 && elRnd(E) < 0.04 * E.dry) elLight(E, i, 3); }
 }
 function elGasFree(u) { const M = btM(u); return !!(u.und || M.fly || M.fam === 'undead' || M.fam === 'spirit' || M.fam === 'thing'); }      // кому яд нипочём: мёртвым, духам, бездушным вещам; летуны над облаком
 function elFlee(B, u) {                                                           // ИИ: стоишь в огне или он вплотную — куда уйти: к ближней не горящей земле (точку держим 0,8 с, без метаний); null — огня рядом нет
@@ -6129,7 +6169,7 @@ function elGust(B, inside, ox, oy) {                                            
   return n;
 }
 function elStep(B) { return EL && EL.B === B ? EL : null; }                      // отрисовка: сетка шагает в бою, отсюда только читаем
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { ELC, ELHZ, elInit, elGet, elTick, elStep, elSim, elFlee, elNeed, elCellAt, elBurnUnits, elGust, elGasAdd, elGasStep, elGasFree, elLight, elZoneOn, elCold, elDry, elState: () => EL });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { ELC, ELHZ, elInit, elGet, elTick, elStep, elSim, elFlee, elNeed, elCellAt, elBurnUnits, elGust, elGasAdd, elGasStep, elGasFree, elTarPour, elTarLine, elRubble, elCrack, elRubbleAt, elCrackAt, elLight, elZoneOn, elCold, elDry, elState: () => EL });
 
 /* ===================== Отрисовка города ===================== */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -6311,6 +6351,7 @@ function resIcon(g, k, x, y, s) {
   else if (k === 'spear') { g.strokeStyle = '#8b6a44'; g.lineWidth = 2; g.beginPath(); g.moveTo(-5, 6); g.lineTo(3, -3); g.stroke(); g.fillStyle = '#c8ced8'; poly0(g, [[2, -6], [7, -8], [5, -2]]); g.fill(); }
   else if (k === 'crys') { g.fillStyle = '#7ad0ff'; poly0(g, [[0, -8], [5, -2], [3, 7], [-3, 7], [-5, -2]]); g.fill(); g.fillStyle = '#d6f1ff'; poly0(g, [[0, -8], [5, -2], [0, 0], [-5, -2]]); g.fill(); }
   else if (k === 'shield') { g.fillStyle = '#8a5a32'; ci(g, 0, 0, 7); g.fillStyle = '#a8743f'; ci(g, -1, -1, 5.2); g.strokeStyle = '#c8ced8'; g.lineWidth = 1.4; g.beginPath(); g.arc(0, 0, 6.6, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#d9dee6'; ci(g, 0, 0, 1.8); }
+  else if (k === 'tar') { g.fillStyle = '#6b4a2c'; rr(g, -5, -6, 10, 12, 2); g.fill(); g.fillStyle = '#3e2a18'; g.fillRect(-5, -3, 10, 1.6); g.fillRect(-5, 2, 10, 1.6); g.fillStyle = '#17110c'; el(g, 0, -6, 4, 1.6); g.fillStyle = '#17110c'; ci(g, 3, 7, 1.6); }      // бочонок смолы, капля сбегает
   else if (k === 'trap') { g.strokeStyle = '#c8ced8'; g.lineWidth = 2; g.beginPath(); g.arc(0, 2, 6, Math.PI, 0); g.stroke(); g.beginPath(); for (let q = -2; q <= 2; q++) { g.moveTo(q * 2.6, 2); g.lineTo(q * 2.6, -2); } g.stroke(); g.fillStyle = '#8b6a44'; g.fillRect(-7, 2, 14, 2.5); }
   else { g.fillStyle = '#f2c230'; ci(g, 0, 0, 6); g.fillStyle = '#fff3b0'; ci(g, -1.8, -1.8, 2); }
   g.restore();
@@ -8463,6 +8504,12 @@ function rtDrawUnit(B, u, t) {
   if (u.boss && u.side === 1 && !u.und && !u.ba && !(typeof cineBoss === 'function' && cineBoss(B) === u)) { const tp = top - (btM(u).scale ? 40 : 30) * z; ctx.fillStyle = '#ffd870'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; ctx.font = '800 ' + Math.round(10 + 3 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; const nm = (T('bossN')[u.boss] || '') + (u.heads ? ' · ' + fill(T('rtTxt').headsN || '{n}', { n: u.heads }) : ''); ctx.strokeText(nm, X, tp); ctx.fillText(nm, X, tp); }
 }
 const KBQ = { air: 0.6, lie: 0.2 };      /* наклоны четвероногих: в полёте (знак — подбор по кадрам) и лёжа */
+function rtStones(X, Y, r, z, n, sd) {                                          // горка камней: те же валуны, что на поле, только мелкие; под ними — тёмная вмятина
+  ctx.globalAlpha = 0.28; ctx.fillStyle = '#2a2420'; ctx.beginPath(); ctx.ellipse(X, Y, r * 1.05, r * 0.5, 0, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
+  if (typeof TS === 'undefined' || !TS.ready) { ctx.fillStyle = TSP.stone ? TSP.stone[1] : '#8a8f99'; for (let i = 0; i < n; i++) ci(ctx, X + (i - n / 2) * 7 * z, Y + (i % 2) * 4 * z, 4 * z); return; }
+  const P = []; for (let i = 0; i < n; i++) { const h = (((sd + i * 7919) * 2654435761) >>> 20 & 1023) / 1023, h2 = (((sd * 31 + i * 104729) * 2246822519) >>> 20 & 1023) / 1023, a = h * 6.283 + i * 2.4, rr = r * (i === 0 ? 0 : 0.3 + 0.62 * h2); P.push({ x: X + Math.cos(a) * rr, y: Y + Math.sin(a) * rr * 0.5, k: 'rock' + (1 + ((sd + i) & 3)), s: (i === 0 ? 1.25 : 0.65 + h2 * 0.5) * (1 - rr / r * 0.3), f: (i & 1) === 1 }); }
+  P.sort((a, b) => a.y - b.y); for (const p of P) tsBlit(tsCanvas(p.k), TSD[p.k], 0, p.x, p.y + 3 * z, TSS * z * p.s, p.f, 1);
+}
 function rtDrawOb(B, ob, t) {
   const X = rX(ob.x), Y = rY(ob.y), z = RTV.z, pal = terrPal();
   if (ob.k === 'tree' && TS.ready) { const k = (Math.round(ob.x) % 3) ? 'tree1' : 'tree3', D = TSD[k], R = B.rt, burning = ob.burnT && !ob.burnt, ph = burning ? Math.min(1, (R.t - ob.burnT) / 7) : 0;
@@ -8473,7 +8520,8 @@ function rtDrawOb(B, ob, t) {
     return; }
   if (ob.k === 'ice') { const r = ob.r * z; ctx.fillStyle = '#bfe8ff'; ctx.beginPath(); ctx.moveTo(X, Y - r * 2); ctx.lineTo(X + r, Y - r * 0.6); ctx.lineTo(X + r * 0.7, Y + r * 0.3); ctx.lineTo(X - r * 0.8, Y + r * 0.3); ctx.lineTo(X - r, Y - r * 0.8); ctx.closePath(); ctx.fill(); ctx.strokeStyle = TSP.out; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#eefaff'; ctx.fillRect(X - r * 0.3, Y - r * 1.4, r * 0.25, r * 0.9); return; }
   if (ob.k === 'rock' && TS.ready) { const k = 'rock' + (1 + (Math.round(ob.x) % 4)); tsBlit(tsCanvas(k), TSD[k], 0, X, Y + 10 * z, TSS * z * 3.4, false, 2); if (ob.hp < 3) { ctx.strokeStyle = TSP.out; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X - 8 * z, Y - 18 * z); ctx.lineTo(X - 2 * z, Y - 8 * z); ctx.lineTo(X + 6 * z, Y - 14 * z); ctx.stroke(); } return; }
-  if (ob.k === 'rubble') { ctx.fillStyle = TSP.stone[1]; for (let k = 0; k < 5; k++) ci(ctx, X + (k - 2) * 9 * z, Y + (k % 2) * 5 * z, 6 * z); return; }
+  if (ob.k === 'rubble') { rtStones(X, Y, 30 * z, z, 7, Math.round(ob.x * 7 + ob.y * 13)); return; }
+
   ctx.fillStyle = ob.k === 'rock' ? '#8a8f99' : '#3c7a3a'; ci(ctx, X, Y, ob.r * z);
 }
 function rtDrawTele(B, T0) {
@@ -10006,7 +10054,8 @@ function bstEvents(B, z) {
 /* ---------- следы на земле: выжженное, воронка ---------- */
 function bstDecals(B, z, t) {
   const R = B.rt; if (!R.dec || !R.dec.length) return;
-  for (const d of R.dec) { const age = R.t - d.t, X = rX(d.x), Y = rY(d.y), r = d.r * z, fade = Math.max(0, 1 - age / 40);
+  for (const d of R.dec) { const age = R.t - d.t, X = rX(d.x), Y = rY(d.y), r = d.r * z, fade = d.k === 'stones' ? 1 : Math.max(0, 1 - age / 40);
+    if (d.k === 'stones') { rtStones(X, Y, r, z, d.n || 4, d.s | 0); continue; }      /* камни от упавшей глыбы лежат до конца боя */
     if (d.k === 'scorch') { ctx.fillStyle = '#2a1e16'; for (let i = 0; i < 4; i++) { const a = d.rot + i * 1.7, rr = r * (0.45 + 0.18 * ((i * 7 + Math.round(d.x)) % 5) / 4); ctx.globalAlpha = 0.2 * fade; ctx.beginPath(); ctx.ellipse(X + Math.cos(a) * r * 0.35, Y + Math.sin(a) * r * 0.17, rr, rr * 0.5, 0, 0, 6.3); ctx.fill(); } ctx.globalAlpha = 0.34 * fade; ctx.fillStyle = '#120c0a'; ctx.beginPath(); ctx.ellipse(X, Y, r * 0.42, r * 0.21, 0, 0, 6.3); ctx.fill();
       if (age < 4) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * (1 - age / 4) * (0.7 + 0.3 * Math.sin(t * 9 + d.rot * 3)); ctx.fillStyle = '#ff7a22'; for (let i = 0; i < 3; i++) ctx.fillRect(Math.round(X + Math.cos(d.rot + i * 2.1) * r * 0.5), Math.round(Y + Math.sin(d.rot + i * 2.1) * r * 0.22), Math.max(1, Math.round(2 * z)), Math.max(1, Math.round(2 * z))); ctx.globalCompositeOperation = 'source-over'; } }
     else if (d.k === 'scuff') { ctx.globalAlpha = 0.32 * fade; ctx.strokeStyle = '#3a2e20'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, 2.2 * z); const ca = Math.cos(d.a), sa = Math.sin(d.a) * 0.55, L = r, nx = -sa, ny = ca; for (const o of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + nx * o * 4 * z, Y + ny * o * 2 * z); ctx.lineTo(X - ca * L + nx * o * 4 * z, Y - sa * L + ny * o * 2 * z); ctx.stroke(); } ctx.lineCap = 'butt'; }
@@ -10283,16 +10332,29 @@ const ELP = ['#5c160b', '#7a1e0e', '#a52a12', '#d8431a', '#ee5f1c', '#ff7a1e', '
 const ELV = { cv: null, g: null, img: null, B: null, any: false, head: null, nxt: null };
 function elOn() { return true; }      /* с 13.11 огонь — часть боя: выключать его нельзя (выключатель убран из меню) */
 function elGround(E, z) {                                                         // гарь под ногами: копится, пока клетка горит, и остаётся до конца боя
-  if (!ELV.cv || ELV.cv.width !== E.w || ELV.cv.height !== E.h || ELV.B !== E.B) { ELV.cv = document.createElement('canvas'); ELV.cv.width = E.w; ELV.cv.height = E.h; ELV.g = ELV.cv.getContext('2d'); ELV.img = ELV.g.createImageData(E.w, E.h); ELV.B = E.B; ELV.any = false; E.dirty = 1; }
-  if (E.dirty) { const d = ELV.img.data, A = E.ash, Fr = E.frost, Wt = E.wet, n = E.n; let any = false;
-    for (let i = 0; i < n; i++) { const v = A[i], f = Fr[i], wv = Wt[i], o = i * 4;      /* слои клетки снизу вверх: гарь → сырость/лужа → иней; смешение «поверх» вручную */
-      if (!v && !f && (!wv || wv === 255)) { d[o + 3] = 0; continue; } any = true; const hs = (((i * 2654435761) >>> 28) & 15) / 15;
+  const W2 = E.w * 2, H2 = E.h * 2;      /* картинка вдвое мельче клетки: края луж, гари и смолы скругляются (как Scale2x в пиксельной графике) */
+  if (!ELV.cv || ELV.cv.width !== W2 || ELV.cv.height !== H2 || ELV.B !== E.B) { ELV.cv = document.createElement('canvas'); ELV.cv.width = W2; ELV.cv.height = H2; ELV.g = ELV.cv.getContext('2d'); ELV.img = ELV.g.createImageData(W2, H2); ELV.cb = new Uint8ClampedArray(E.n * 4); ELV.ck = new Uint8Array(E.n); ELV.B = E.B; ELV.any = false; E.dirty = 1; }
+  if (E.dirty) { const w = E.w, h = E.h, d = ELV.cb, K = ELV.ck, A = E.ash, Fr = E.frost, Wt = E.wet, T = E.tar, n = E.n; let any = false;
+    for (let i = 0; i < n; i++) { const v = A[i], f = Fr[i], wv = Wt[i], o = i * 4;      /* слои клетки снизу вверх: гарь → щебень → смола → сырость/лужа → иней; смешение «поверх» вручную */
+      if (!v && !f && !T[i] && !E.rub[i] && (!wv || wv === 255)) { d[o + 3] = 0; K[i] = 0; continue; } any = true; const hs = (((i * 2654435761) >>> 28) & 15) / 15; let k = 1;
       let r = 0, g = 0, b = 0, a = 0;
-      if (v) { a = v * (0.5 + hs / 4) / 255; r = 30; g = 22; b = 16; }
-      if (wv && wv < 255) { const pud = wv > 150, glint = pud && hs > 0.84, sa = glint ? 0.62 : pud ? 0.56 : Math.min(0.5, wv / 300), sr = glint ? 178 : pud ? 66 : 28, sg = glint ? 206 : pud ? 104 : 42, sb = glint ? 228 : pud ? 138 : 52,      /* лужа — серо-синяя вода с бликами; подсыхая, темнеет сыростью */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; }
-      if (f) { const spark = hs > 0.93 && f > 140, sa = spark ? 0.85 : Math.min(0.62, f / 430 + hs * 0.14), sr = spark ? 255 : 222, sg = spark ? 255 : 238, sb = 250,      /* иней — сквозь него видна трава, редкие искры */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; }
-      d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = (a * 255) | 0; }
-    ELV.g.putImageData(ELV.img, 0, 0); ELV.any = any; E.dirty = 0; }
+      if (v) { a = Math.min(1, v * (0.6 + hs * 0.3) / 255); r = 27; g = 24; b = 21; }      /* гарь — серо-чёрная, а не оливковая */
+      const rb = E.rub[i]; if (rb) { const crk = rb < 100, st = rb > 185, sa = crk ? 0.72 : st ? 0.36 : 0.24, sr = crk ? 36 : st ? 84 : 112, sg = crk ? 31 : st ? 70 : 96, sb = crk ? 26 : st ? 54 : 74, na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = crk ? 2 : st ? 3 : 8; }      /* щебень: пыльная земля, камешки дорисует вторая ступень; трещина — тёмная */
+      const tv = T[i]; if (tv) { const x = i % w, rim = (x > 0 && !T[i - 1]) || (x < w - 1 && !T[i + 1]) || (i >= w && !T[i - w]) || (i + w < n && !T[i + w]), sa = rim ? 0.72 : Math.max(0.6, Math.min(0.93, (tv - 120) / 90 + 0.5)), sr = rim ? 52 - hs * 8 : 19 - hs * 5, sg = rim ? 37 - hs * 6 : 16 - hs * 4, sb = rim ? 22 - hs * 4 : 14 - hs * 3, na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = 4; }      /* смола — почти чёрная, по краю тонкая и бурая */
+      if (wv && wv < 255) { const pud = wv > 150, glint = pud && hs > 0.84, sa = glint ? 0.62 : pud ? 0.56 : Math.min(0.5, wv / 300), sr = glint ? 178 : pud ? 66 : 28, sg = glint ? 206 : pud ? 104 : 42, sb = glint ? 228 : pud ? 138 : 52,      /* лужа — серо-синяя вода с бликами; подсыхая, темнеет сыростью */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; k = pud ? 6 : k > 1 ? k : 5; }
+      if (f) { const spark = hs > 0.93 && f > 140, sa = spark ? 0.85 : Math.min(0.62, f / 430 + hs * 0.14), sr = spark ? 255 : 222, sg = spark ? 255 : 238, sb = 250,      /* иней — сквозь него видна трава, редкие искры */ na = sa + a * (1 - sa); r = (sr * sa + r * a * (1 - sa)) / na; g = (sg * sa + g * a * (1 - sa)) / na; b = (sb * sa + b * a * (1 - sa)) / na; a = na; if (f > 100) k = 7; }
+      d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = (a * 255) | 0; K[i] = k; }
+    if (any) { const D = ELV.img.data;      /* вторая ступень: каждая клетка — 2×2 точки; угол берёт цвет соседа, если два соседа у этого угла одного рода, а два других — нет */
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, P = K[i], iA = y > 0 ? i - w : i, iD = y < h - 1 ? i + w : i, iC = x > 0 ? i - 1 : i, iB = x < w - 1 ? i + 1 : i, Ak = K[iA], Dk = K[iD], Ck = K[iC], Bk = K[iB];
+        let s0 = i, s1 = i, s2 = i, s3 = i; if (Ck === Ak && Ck !== Dk && Ak !== Bk) s0 = iA; if (Ak === Bk && Ak !== Ck && Bk !== Dk) s1 = iB; if (Dk === Ck && Dk !== Bk && Ck !== Ak) s2 = iC; if (Bk === Dk && Bk !== Ak && Dk !== Ck) s3 = iD;
+        const o = (y * 2 * W2 + x * 2) * 4, sh = P === 4 && Ak === 4 && Bk === 4 && Ck === 4 && Dk === 4 && ((((i * 2654435761) >>> 28) & 15) > 13);      /* жирный блик на смоле — короткая полоска */
+        const hq = (((i * 2246822519) >>> 27) & 31) / 31, cr = P === 2 ? (1 | (x < w - 1 && Bk === 2 ? 2 : 0) | (y < h - 1 && Dk === 2 ? 4 : 0) | (x > 0 && y < h - 1 && K[i + w - 1] === 2 ? 4 : 0)) : 0;
+        for (let q = 0; q < 4; q++) { const sc = (q === 0 ? s0 : q === 1 ? s1 : q === 2 ? s2 : s3) * 4, oo = o + ((q & 1) * 4) + ((q >> 1) * W2 * 4);
+          if (sh && q < 2) { D[oo] = 84; D[oo + 1] = 88; D[oo + 2] = 98; D[oo + 3] = 235; continue; }
+          if (cr) { if (q === 0 || (q === 1 && cr & 2) || (q === 2 && cr & 4)) { D[oo] = d[i * 4]; D[oo + 1] = d[i * 4 + 1]; D[oo + 2] = d[i * 4 + 2]; D[oo + 3] = d[i * 4 + 3]; } else D[oo + 3] = 0; continue; }      /* трещина — линия в полклетки шириной */
+          D[oo] = d[sc]; D[oo + 1] = d[sc + 1]; D[oo + 2] = d[sc + 2]; D[oo + 3] = d[sc + 3]; } }
+      ELV.g.putImageData(ELV.img, 0, 0); } else if (ELV.any) ELV.g.clearRect(0, 0, W2, H2);
+    ELV.any = any; E.dirty = 0; }
   if (E.steam.length && !(typeof CINE !== 'undefined' && CINE.ghost) && typeof bstEmit === 'function') { for (let k = 0; k < 6 && E.steam.length; k++) { const i = E.steam.pop(), x = (i % E.w + 0.5) * ELC, y = (((i / E.w) | 0) + 0.5) * ELC;      /* пар: белые клубы быстро уходят вверх */
       bstEmit({ k: 'smoke', x: x + (Math.random() - 0.5) * 6, y: y, h: 4, vx: E.wind * 14 + (Math.random() - 0.5) * 12, vy: 0, vh: 38 + Math.random() * 26, a: 0, life: 0.7 + Math.random() * 0.5, r0: 3, r1: 9 + Math.random() * 6, col: '#e6eef4', al: 0.55 }); }
     if (E.steam.length > 40) E.steam.length = 40; }
@@ -11853,7 +11915,7 @@ mergeStr(STR.ru, {
   guildP: 'Сюда приходят те, кто живёт мечом. Их можно нанять в поход или дать им задание за награду.', guildOff: 'Нужен письмоводитель: без него гильдия закрыта', guildAdv: 'Авантюристы', guildNone: 'Пока никого. Слух о гильдии расходится не сразу', guildQ: 'Задания', guildQNone: 'Заданий нет. Их дают на карте края: выберите область',
   advC: { blade: 'мечник', bow: 'лучник', wiz: 'маг', medic: 'лекарь', rogue: 'плут' }, advR: ['железо', 'бронза', 'серебро', 'золото'], advNick: ['Шрам', 'Лиса', 'Искра', 'Камень', 'Ворон', 'Сова', 'Гроза', 'Полынь'], advSt: { free: 'наём {g} зол.', busy: 'на задании', hurt: 'лечит раны' }, advTr: { boast: 'любит приукрасить', coward: 'бережёт шкуру', ok: 'слово держит' },
   questT: 'Задание: {a}', questK: { scout: 'Разведать область', clear: 'Выбить логово' }, questP: 'Награду платят вперёд: её держит гильдия. Провалят — почти всё вернут.', questMin: 'Меньше чем за {g} золота не возьмутся', questPost: 'Объявить · {g} золота', questSt: { open: 'ждёт охотников', taken: 'взято, в пути' }, questWhy: { pay: 'мало платят', danger: 'слишком опасно для тех, кто есть', nobody: 'некому взяться' }, questCancel: 'Снять', questNoLair: 'Чтобы дать задание на логово, о нём надо знать', questErr: { no: 'Гильдия закрыта', area: 'Туда не знают дороги', many: 'Не больше трёх заданий сразу', none: 'Там неизвестно логово', gold: 'Не хватает золота' },
-  bountyT: 'Заказ купцов: {l} ({a}) — {g} золота, ещё {d} дн.', trapT: 'Делать капканы', trapP: '3 дерева за штуку, не больше 6. Берут в поход: зверь, ступивший в капкан, ранен и не двинется', trapN: 'Капканов на складе: {n}', crysN: 'Кристаллов: {n}',
+  bountyT: 'Заказ купцов: {l} ({a}) — {g} золота, ещё {d} дн.', tarT: 'Варить смолу', tarP: '4 дерева за бочонок, не больше 4 (когда капканы не нужны). Берут в поход: смолу разливают перед строем — враг в ней вязнет, а любой огонь превращает её в стену пламени', tarN: 'Смолы на складе: {n}', partyTars: 'Смола', trapT: 'Делать капканы', trapP: '3 дерева за штуку, не больше 6. Берут в поход: зверь, ступивший в капкан, ранен и не двинется', trapN: 'Капканов на складе: {n}', crysN: 'Кристаллов: {n}',
   landTip: 'Коснитесь области, чтобы послать туда разведку или отряд', landBar: 'В пути: {n}',
   dir: { scout: 'Слать разведчиков', scoutP: 'Раз в три дня — в ближние неразведанные места' }, repDid: { scout: 'Послан разведчик: {a}', save: 'Копит дерево и камень на ратушу' },
   b: { guild: ['Гильдия авантюристов', 'Наёмные мечи: идут в поход с вами или берут задания за награду'] },
@@ -11903,7 +11965,7 @@ mergeStr(STR.en, {
   guildP: 'Those who live by the sword come here. Hire them for an expedition or post a quest for a reward.', guildOff: 'A clerk is needed: without one the guild is closed', guildAdv: 'Adventurers', guildNone: 'Nobody yet. Word of the guild takes time to spread', guildQ: 'Quests', guildQNone: 'No quests. Post them on the map of the lands: pick an area',
   advC: { blade: 'swordsman', bow: 'archer', wiz: 'mage', medic: 'healer', rogue: 'rogue' }, advR: ['iron', 'bronze', 'silver', 'gold'], advNick: ['Scar', 'Fox', 'Spark', 'Stone', 'Raven', 'Owl', 'Storm', 'Wormwood'], advSt: { free: 'hire {g} gold', busy: 'on a quest', hurt: 'nursing wounds' }, advTr: { boast: 'likes to embellish', coward: 'saves his skin', ok: 'keeps his word' },
   questT: 'Quest: {a}', questK: { scout: 'Scout the area', clear: 'Clear the lair' }, questP: 'The reward is paid up front and held by the guild. If they fail, most of it comes back.', questMin: 'Nobody will take it for less than {g} gold', questPost: 'Post · {g} gold', questSt: { open: 'awaiting takers', taken: 'taken, on the road' }, questWhy: { pay: 'the pay is too low', danger: 'too dangerous for those at hand', nobody: 'nobody to take it' }, questCancel: 'Withdraw', questNoLair: 'To post a quest on a lair you must know of it', questErr: { no: 'The guild is closed', area: 'Nobody knows the way', many: 'No more than three quests at once', none: 'No lair is known there', gold: 'Not enough gold' },
-  bountyT: "Merchants' bounty: {l} ({a}) — {g} gold, {d} more days", trapT: 'Make traps', trapP: '3 wood each, 6 at most. Taken on expeditions: a beast stepping in is hurt and held', trapN: 'Traps in store: {n}', crysN: 'Crystals: {n}',
+  bountyT: "Merchants' bounty: {l} ({a}) — {g} gold, {d} more days", tarT: 'Brew tar', tarP: '4 wood a barrel, 4 at most (when no traps are needed). Taken on expeditions: poured in front of the line — foes wade in it slowly, and any fire turns it into a wall of flame', tarN: 'Tar in store: {n}', partyTars: 'Tar', trapT: 'Make traps', trapP: '3 wood each, 6 at most. Taken on expeditions: a beast stepping in is hurt and held', trapN: 'Traps in store: {n}', crysN: 'Crystals: {n}',
   landTip: 'Tap an area to send scouts or a party there', landBar: 'On the road: {n}',
   dir: { scout: 'Send scouts', scoutP: 'Every three days — to nearby unexplored places' }, repDid: { scout: 'Sent a scout: {a}', save: 'Saving wood and stone for the town hall' },
   b: { guild: ["Adventurers' guild", 'Swords for hire: they join your expedition or take quests for a reward'] },
@@ -11988,10 +12050,11 @@ function openParty(area, kind, keep) {
     if (av.length && guildOn()) { md.appendChild(el2('div', 'lbl', esc(T('partyAdv')))); const al = el2('div', 'list'); av.forEach(a => { const on = PS.adv.indexOf(a.id) >= 0, r = advRow(a, () => { if (on) PS.adv = PS.adv.filter(x => x !== a.id); else if (PS.sel.length + PS.adv.length < max) PS.adv.push(a.id); else toast(T('tripErr').many); again(); }); if (on) r.classList.add('on'); al.appendChild(r); }); md.appendChild(al); }
     if (kind === 'raid') {
       md.appendChild(tgl5(PS.bait, T('partyBait'), T('partyBaitP'), () => { PS.bait = !PS.bait; again(); }));
+      if ((G.res.tar || 0) >= 1) { const seg = el2('div', 'tg'); seg.appendChild(el2('span', '', esc(T('partyTars')) + ': <b>' + (PS.tars || 0) + '</b> / ' + Math.floor(G.res.tar))); const bx = el2('span', ''); bx.appendChild(btn('pm', '−', () => { PS.tars = Math.max(0, (PS.tars || 0) - 1); again(); })); bx.appendChild(btn('pm', '+', () => { PS.tars = Math.min(Math.floor(G.res.tar), (PS.tars || 0) + 1); again(); })); seg.appendChild(bx); md.appendChild(seg); }
       if (G.res.trap >= 1) { const seg = el2('div', 'tg'); seg.appendChild(el2('span', '', esc(T('partyTraps')) + ': <b>' + PS.traps + '</b> / ' + Math.floor(G.res.trap))); const bx = el2('span', ''); bx.appendChild(btn('pm', '−', () => { PS.traps = Math.max(0, PS.traps - 1); again(); })); bx.appendChild(btn('pm', '+', () => { PS.traps = Math.min(Math.floor(G.res.trap), PS.traps + 1); again(); })); seg.appendChild(bx); md.appendChild(seg); }
       if (S.st >= 2 && A.site && A.site[0] === 'camp' && !S.claim) md.appendChild(tgl5(PS.claim, T('partyClaim'), T('partyClaimP'), () => { PS.claim = !PS.claim; again(); }));
     }
-    const go = btn('btn', esc(T('partyGo')), () => { if (!PS) return; const r = sendTrip(area, { kind: kind, pids: PS.sel, advs: PS.adv, traps: PS.traps, bait: PS.bait, claim: PS.claim }); if (r !== 'ok') { SND.err(); toast(T('tripErr')[r] || r); return; } SND.horn(); PS = null; LSEL = -1; closeModal(); saveSoon(); }); go.dataset.k = 'go'; if (!n) go.classList.add('dimmed'); md.appendChild(go);
+    const go = btn('btn', esc(T('partyGo')), () => { if (!PS) return; const r = sendTrip(area, { kind: kind, pids: PS.sel, advs: PS.adv, traps: PS.traps, tars: PS.tars || 0, bait: PS.bait, claim: PS.claim }); if (r !== 'ok') { SND.err(); toast(T('tripErr')[r] || r); return; } SND.horn(); PS = null; LSEL = -1; closeModal(); saveSoon(); }); go.dataset.k = 'go'; if (!n) go.classList.add('dimmed'); md.appendChild(go);
   }, true);
   if (sc) { const m = ui.querySelector('.md'); if (m) m.scrollTop = sc; }
 }
@@ -12024,7 +12087,8 @@ function questList(md, again) {
 }
 function landB(md, b) {
   if (b.site && !b.site.to) return;
-  if (b.type === 'workshop') { md.appendChild(tgl5(!!G.trapOn, T('trapT'), T('trapP'), () => { G.trapOn = !G.trapOn; saveSoon(); openB(b.id); })); md.appendChild(el2('p', '', esc(T('trapN', { n: Math.floor(G.res.trap) })))); return; }
+  if (b.type === 'workshop') { md.appendChild(tgl5(!!G.trapOn, T('trapT'), T('trapP'), () => { G.trapOn = !G.trapOn; saveSoon(); openB(b.id); })); md.appendChild(el2('p', '', esc(T('trapN', { n: Math.floor(G.res.trap) }))));
+    md.appendChild(tgl5(!!G.tarOn, T('tarT'), T('tarP'), () => { G.tarOn = !G.tarOn; saveSoon(); openB(b.id); })); md.appendChild(el2('p', '', esc(T('tarN', { n: Math.floor(G.res.tar || 0) })))); return; }
   if (b.type !== 'guild') return; const L = G.land;
   md.appendChild(el2('p', '', esc(T('guildP')))); if (!guildOn()) { md.appendChild(el2('p', 'warn', esc(T('guildOff')))); }
   if (L.bounty) md.appendChild(el2('p', 'tip', esc(T('bountyT', { l: T('lairN')[L.bounty.kind], a: aName(L.bounty.area), g: L.bounty.reward, d: Math.max(0, L.bounty.till - G.day) }))));
@@ -13345,7 +13409,7 @@ mergeStr(STR.ru, {
   rtGs: { slash: 'линия от героя через врагов', whirl: 'круг', rally: 'галочка', stand: 'держать палец на герое', bolt: 'линия от героя', ward: 'круг', chain: 'зигзаг', ice: 'галочка', fog: 'спираль', eye: 'держать палец на враге', raise: 'линия от тела к некроманту', drain: 'линия от врага к некроманту', order: 'линия от своих мертвецов к врагу', call: 'круг вокруг некроманта', group: 'линия от некроманта в точку', tide: 'держать палец на некроманте', recall: 'круг вокруг своих мертвецов', shadow: 'линия от некроманта к своему мертвецу', wrath: 'спираль', unshak: 'зигзаг' },
   rtAim: { raise: 'Коснитесь тела врага — оно встанет', order: 'Коснитесь врага — мертвецы ударят его разом', drain: 'Коснитесь врага', shadow: 'Коснитесь своего мертвеца', recall: 'Коснитесь места, где стоят ваши мертвецы', slash: 'Коснитесь, куда рвануть', bolt: 'Коснитесь, куда бросить шар', ward: 'Коснитесь места для оберега', chain: 'Коснитесь врага', ice: 'Коснитесь места', fog: 'Коснитесь места', eye: 'Коснитесь врага', meteor: 'Коснитесь места', wrath: 'Коснитесь, куда ударить', group: 'Коснитесь места' },
   rtWhy: { lv: 'Нужен уровень повыше', cd: 'Ещё не готово', mp: 'Мало маны', tg: 'Не та цель', far: 'Слишком далеко', full: 'Узы заняты: после боя можно отпустить мертвецов', none: 'Некого', no: 'Сейчас нельзя', chan: 'Подъём идёт…' },
-  rtTxt: { fear: 'страх!', stun: 'оглушён', parry: 'Отбил!', reform: 'встаёт снова', trollUp: 'зарастает!' },
+  rtTxt: { tarPour: 'смола разлита', fear: 'страх!', stun: 'оглушён', parry: 'Отбил!', reform: 'встаёт снова', trollUp: 'зарастает!' },
   rtYrs: '−{n} г. жизни',
   rtMsg: { wave: 'Из логова идут ещё', lichReform: 'Лич рассыпался — но встанет у филактерии. Разбейте её!', phylBroke: 'Филактерия разбита: лич больше не встанет', trollUp: 'Тролль зарастает. Добейте огнём!', parry: 'Отбит удар!', rockfall: 'Обвал! Дракон оглушён', yrsPaid: 'Узы заняты — подъём стоил {n} г. жизни', uzFull: 'Узы заняты: после боя можно отпустить мертвецов' },
   rtHud: { focus: 'Сосредоточение', mana: 'Мана', uz: 'Узы {a}/{b}', under: 'под землёй {n}', auto: 'Сам', camF: 'Камера: за героем', camA: 'Камера: всё поле', start: 'В бой!', retreat: 'Отступить', pause: 'Пауза', go: 'Дальше', x2: '×2', paused: 'Пауза. Время стоит — умения и приказы работают', prep: 'Враги не ждут удара. Отряд готов. Ловушки — касанием по полю ({n}).', prepNo: 'Отряд готов.', noHero: 'Героя в отряде нет — бойцы бьются сами. Плечом к плечу они держат удар лучше; коснитесь врага — ударят все разом', heroDown: 'Герой пал — отряд бьётся сам', mend: 'Чинить мертвецов', draw: 'Рисуйте знак — время замедлено', tip: 'Касание по полю — идти или бить. Умения — кнопками', tipG: 'Касание по полю — идти или бить. Умения — кнопками или жестами', aim: 'Коснитесь поля: {a}', hold: 'Подержите кнопку — что она делает' },
@@ -13364,7 +13428,7 @@ mergeStr(STR.en, {
   rtGs: { slash: 'a line from the hero through foes', whirl: 'a circle', rally: 'a check mark', stand: 'hold your finger on the hero', bolt: 'a line from the hero', ward: 'a circle', chain: 'a zigzag', ice: 'a check mark', fog: 'a spiral', eye: 'hold your finger on a foe', raise: 'a line from a body to the necromancer', drain: 'a line from a foe to the necromancer', order: 'a line from your dead to a foe', call: 'a circle around the necromancer', group: 'a line from the necromancer to a spot', tide: 'hold your finger on the necromancer', recall: 'a circle around your dead', shadow: 'a line from the necromancer to one of your dead', wrath: 'a spiral', unshak: 'a zigzag' },
   rtAim: { raise: 'Tap a foe’s body — it will rise', order: 'Tap a foe — your dead strike it together', drain: 'Tap a foe', shadow: 'Tap one of your dead', recall: 'Tap where your dead stand', slash: 'Tap where to dash', bolt: 'Tap where to throw the ball', ward: 'Tap a spot for the ward', chain: 'Tap a foe', ice: 'Tap a spot', fog: 'Tap a spot', eye: 'Tap a foe', meteor: 'Tap a spot', wrath: 'Tap where to strike', group: 'Tap a spot' },
   rtWhy: { lv: 'Needs a higher level', cd: 'Not ready yet', mp: 'Not enough mana', tg: 'Wrong target', far: 'Too far', full: 'No free bonds: after the battle you can release some of the dead', none: 'Nobody to call', no: 'Not now', chan: 'Raising…' },
-  rtTxt: { fear: 'fear!', stun: 'stunned', parry: 'Parried!', reform: 'rises again', trollUp: 'regrows!' },
+  rtTxt: { tarPour: 'tar poured', fear: 'fear!', stun: 'stunned', parry: 'Parried!', reform: 'rises again', trollUp: 'regrows!' },
   rtYrs: '−{n} years of life',
   rtMsg: { wave: 'More come out of the lair', lichReform: 'The lich crumbled — but will rise at the phylactery. Break it!', phylBroke: 'Phylactery broken: the lich will not rise again', trollUp: 'The troll regrows. Finish it with fire!', parry: 'Blow parried!', rockfall: 'Rockfall! The dragon is stunned', yrsPaid: 'No free bonds — the raising cost {n} years of life', uzFull: 'No free bonds: after the battle you can release some of the dead' },
   rtHud: { focus: 'Focus', mana: 'Mana', uz: 'Bonds {a}/{b}', under: 'underground {n}', auto: 'Auto', camF: 'Camera: follow hero', camA: 'Camera: whole field', start: 'Attack!', retreat: 'Retreat', pause: 'Pause', go: 'Go on', x2: '×2', paused: 'Paused. Time stands still — abilities and orders work', prep: 'The foes are not expecting you. Traps — tap the field ({n}).', prepNo: 'The squad is ready.', noHero: 'No hero in the party — the squad fights on its own. Shoulder to shoulder they take blows better; tap a foe and they all strike it', heroDown: 'The hero has fallen — the squad fights on', mend: 'Mend the dead', draw: 'Draw a sign — time is slowed', tip: 'Tap the field to move or strike. Abilities — buttons', tipG: 'Tap the field to move or strike. Abilities — buttons or gestures', aim: 'Tap the field: {a}', hold: 'Hold a button to see what it does' },
