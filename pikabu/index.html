@@ -14029,6 +14029,7 @@ function gestIcon(kind) {
 const RT_GLYPH = { slash: 'line', whirl: 'circle', rally: 'vee', stand: 'hold', bolt: 'line', ward: 'circle', chain: 'zigzag', ice: 'vee', fog: 'spiral', eye: 'hold', raise: 'line', drain: 'line', order: 'line', call: 'circle', group: 'line', tide: 'hold', recall: 'circle', shadow: 'line', wrath: 'spiral', unshak: 'zigzag', meteor: 'hold', tstop: 'circle', dusta: 'circle', harvest: 'circle', realm: 'spiral' };
 const RT_ORDER = { grav: ['pull', 'push', 'weight', 'rockfall', 'float', 'hole', 'meteor'], war: ['slash', 'whirl', 'rally', 'stand', 'wrath', 'unshak'], mage: ['bolt', 'ward', 'chain', 'ice', 'fog', 'eye', 'meteor', 'tstop'], necro: ['raise', 'raiseAll', 'order', 'hold', 'drain', 'call', 'recall', 'shadow', 'mend', 'dusta', 'harvest', 'realm'] };
 const RT_INST = { whirl: 1, rally: 1, call: 1, unshak: 1, tstop: 1, dusta: 1, harvest: 1, realm: 1, raiseAll: 1 };      // приёмы без цели: сразу по нажатию
+const RT_PT = { pull: 1, push: 1, weight: 1, rockfall: 1, float: 1, hole: 1 };      // приёмы в точку: нажать кнопку, потом коснуться поля
 const RT_TOG = { hold: 1, mend: 1 };                                                                                       // переключатели: приказ свите, починка
 function rtShown(B, h, ab) { if (RT_TOG[ab]) return h.hero === 'necro' && (ab === 'hold' || (h.lv || 1) >= 2 || !!B.demi); const D = RTAB[rtCls(h)][ab]; if (!D) return false; if (D.demi && !h.demi) return false; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return false; return true; }
 /* значки умений: что умение делает (а не какой жест рисовать) */
@@ -14183,6 +14184,7 @@ function rtAimCast(B, ab, w) {
   if (ab === 'slash' || ab === 'bolt' || ab === 'chain' || ab === 'ice' || ab === 'fog' || ab === 'group') return rtSay(rtCast(B, ab, { x: w.x, y: w.y, n: 3, grp: RTU.grp || null }), ab);
   if (ab === 'ward') return rtSay(rtCast(B, 'ward', { x: w.x, y: w.y, r: 110 }), ab);
   if (ab === 'wrath' || ab === 'meteor') return rtSay(rtCast(B, ab, { x: w.x, y: w.y }), ab);
+  if (RT_PT[ab]) return rtSay(rtCast(B, ab, { x: w.x, y: w.y }), ab);      /* маг тяжести и пути мага: кнопка, затем касание — в точку (до 14.11 у мага тяжести касание после кнопки пропадало) */
   if (ab === 'recall') return rtSay(rtCast(B, 'recall', { x: w.x, y: w.y, r: 110 }), ab);
   if (ab === 'eye' || ab === 'drain') { const f = rtHit(B, w, 1, 46); if (!f) { SND.err(); toast(T('rtWhy').tg); return; } return rtSay(rtCast(B, ab, { id: f.id }), ab); }
   if (ab === 'order') { const f = rtHit(B, w, 1, 46); if (!f) { SND.err(); toast(T('rtWhy').tg); return; } return rtSay(rtCast(B, 'order', { id: f.id }), ab); }
