@@ -1,0 +1,3 @@
+target pikabu
+parts 6
+sha256 183f2300c326ccfc5eaca654f2afa896acd1da5073f08b14e9e9751e6ca6258e
