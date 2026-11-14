@@ -4185,7 +4185,7 @@ function rtSwingHit(B, u, S) {                               // кадр уда�
   let t = t0; if (!live(t) && (S.k === 'shoot' || S.k === 'melee')) {      // цель пала, пока замахивался: удар — по ближнему рядом, стрела — в другого; некого — удар не пропал, боец сразу ищет нового
     let best = null, bd = 1e9; for (const q of rtFoes(B, u)) { const d = rtD(u, q); if (d < bd && (S.k === 'shoot' ? d <= rtReach(B, u, q) : d <= rtReach(B, u, q) + 20)) { bd = d; best = q; } }
     t = best; if (!t) { u.ac = Math.min(u.ac || 0, 0.15); return; } }
-  if (S.k === 'shoot') { B.rt.pr.push({ x: u.px, y: u.py - 18, tx: t.px, ty: t.py, tid: t.id, sp: M.magic || u.magic ? 360 : 460, d: rtDmg(B, u, t, rtWindK(B, u, t), { rngd: true }), o: { rngd: 1, magic: !!(M.magic || u.magic) }, from: u.id, k: M.magic || u.magic ? 'bolt' : 'arrow' }); return; }
+  if (S.k === 'shoot') { B.rt.pr.push({ x: u.px, y: u.py - 18, tx: t.px, ty: t.py, tid: t.id, sp: M.magic || u.magic ? 360 : 460, d: rtDmg(B, u, t, rtWindK(B, u, t), { rngd: true }), o: { rngd: 1, magic: !!(M.magic || u.magic) }, from: u.id, k: M.magic || u.magic ? 'bolt' : 'arrow', sk: u.skin || '' }); return; }
   if (S.k !== 'melee') return;
   if (t && t.hp > 0 && !t.out && (rtD(u, t) <= rtReach(B, u, t) + 40 || btM(t).scale || btM(t).big || t.obj)) rtStrike(B, u, t, S.mul || 1, { rngd: false, kbMul: S.kbMul || 1 });
   else rtFx(B, { k: 'whiff', x: u.px + (u.face || 1) * 18, y: u.py - 16, dur: 0.25 });
@@ -4360,7 +4360,7 @@ function rtTeleHit(B, T0) {
   if (T0.dash && a && a.hp > 0) { let x2 = T0.x2, y2 = T0.y2; if (T0.gore) { const dx = T0.x2 - T0.x, dy = T0.y2 - T0.y, L = Math.hypot(dx, dy) || 1; let hit = null, best = 1e9; for (const ob of B.rt.ob) if ((ob.k === 'rock' || ob.k === 'ice') && rtSeg(ob.x, ob.y, T0.x, T0.y, T0.x2, T0.y2) < ob.r + 18) { const d = Math.hypot(ob.x - T0.x, ob.y - T0.y); if (d < best) { best = d; hit = ob; } } if (hit) { const d = Math.max(0, best - hit.r - 26); x2 = T0.x + dx / L * d; y2 = T0.y + dy / L * d; a.s.stun = 4; rtRockHit(B, hit, a); rtMsg(B, 'minoRock'); rtFx(B, { k: 'txt', x: x2, y: y2 - 50, s: 'stun' }); } } a.px = x2; a.py = y2; }
   if (T0.land && a && a.hp > 0) { a.px = T0.lx; a.py = T0.ly; rtFx(B, { k: 'arrive', x: T0.lx, y: T0.ly }); }
   if (T0.k === 'cone' && T0.fire) { rtFx(B, { k: 'breath', x: T0.x, y: T0.y, a: T0.a, len: T0.len, half: T0.half, dur: 0.7 }); const ex = T0.x + Math.cos(T0.a) * T0.len * 0.6, ey = T0.y + Math.sin(T0.a) * T0.len * 0.6; B.rt.zn.push({ x: ex - 36, y: ey - 36, w: 72, h: 72, k: 'fire', t1: 3 }); }
-  else if (T0.meteor) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r }); B.rt.zn.push({ x: T0.x - 60, y: T0.y - 60, w: 120, h: 120, k: 'fire', t1: 3 }); }
+  else if (T0.meteor) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r, sk: T0.sk || '' }); B.rt.zn.push({ x: T0.x - 60, y: T0.y - 60, w: 120, h: 120, k: 'fire', t1: 3 }); }
   else if (T0.k === 'cone' && T0.frost) { rtFx(B, { k: 'frostcone', x: T0.x, y: T0.y, a: T0.a, len: T0.len, half: T0.half, dur: 0.05 }); rtDouse(B, (x, y) => rtInTele(T0, { px: x, py: y, r: 0 }), 0, T0.side); }      /* ледяная волна: иней по клину, огонь в нём гаснет */
   else if (T0.k === 'circle') rtFx(B, { k: T0.stun ? 'scream' : 'slam', x: T0.x, y: T0.y, r: T0.r, dur: 0.5 });
   if (T0.crack && typeof elCrackAt === 'function') elCrackAt(B, T0.x, T0.y, T0.r * 0.8);      /* топот трескает землю */
@@ -4518,7 +4518,7 @@ function rtCast(B, ab, p) {
     rtFx(B, { k: 'wrath', x: u.px, y: u.py, x2: x2, y2: y2, dur: 0.7 }); rtSpend(B, u, ab); return n;
   }
   if (ab === 'unshak') { u.s.unshak = 5; u.s.taunt = 5; rtFx(B, { k: 'ward', x: u.px, y: u.py, r: 40, dur: 5 }); rtSpend(B, u, ab); return 'ok'; }
-  if (ab === 'meteor') { R.tele.push({ k: 'circle', x: p.x, y: p.y, r: 140, t0: R.t, t1: R.t + 1.4, by: u.id, side: 0, dmg: 60 * RTK, fire: 1, meteor: 1, swing: 1 }); rtSpend(B, u, ab); return 'ok'; }
+  if (ab === 'meteor') { R.tele.push({ k: 'circle', x: p.x, y: p.y, r: 140, t0: R.t, t1: R.t + 1.4, by: u.id, side: 0, dmg: 60 * RTK, fire: 1, meteor: 1, swing: 1, sk: u.skin || '' }); rtSpend(B, u, ab); return 'ok'; }
   if (ab === 'tstop') { let n = 0; for (const f of rtFoes(B, u)) { f.s.frz = 3.5; n++; } rtFx(B, { k: 'tstop', x: u.px, y: u.py, dur: 3.5 }); rtSpend(B, u, ab); return n; }
   if (ab === 'dusta') { for (let i = 0; i < 6; i++) { const q = btAdd(B, { side: 0, k: 'skel', und: true, sum: 1, hp: Math.round(MON.skel.hp * 1.5), d: Math.round(MON.skel.d * 1.3), mv: 3 }); const a = i / 6 * Math.PI * 2; q.px = clamp(u.px + Math.cos(a) * 70, 20, RTW - 20); q.py = clamp(u.py + Math.sin(a) * 50, 20, RTH - 20); q.tmp = R.t + 25; rtUnit(B, q); rtFx(B, { k: 'raise', x: q.px, y: q.py, dur: 0.7 }); } rtSpend(B, u, ab); return 6; }
   if (ab === 'harvest') { const ar = rtAura(B, u); let n = 0; for (const f of rtFoes(B, u)) if (rtD(f, u) < ar) { const d = Math.round((10 + 2 * lv) * RTK); rtHurt(B, f, d, u, { magic: 1 }); u.hp = Math.min(u.max, u.hp + d * 0.5); n++; } for (const c of B.corp.slice()) if (c.px != null && Math.hypot(c.px - u.px, c.py - u.py) < ar && rtUzFree(B) >= uzOf(c.k)) rtRaiseNow(B, u, c, 0); rtFx(B, { k: 'harvest', x: u.px, y: u.py, r: ar, dur: 0.8 }); rtSpend(B, u, ab); return n; }
@@ -8663,7 +8663,10 @@ function rtDrawOb(B, ob, t) {
 function rtDrawTele(B, T0) {
   const R = B.rt, p = clamp((R.t - T0.t0) / Math.max(0.05, T0.t1 - T0.t0), 0, 1), z = RTV.z, al = 0.18 + p * 0.32;
   if (T0.mine) { const X9 = skx(T0.sk); ctx.fillStyle = 'rgba(' + X9.on + ',' + (al * 0.7) + ')'; ctx.strokeStyle = 'rgba(' + X9.hvL + ',0.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(rX(T0.x), rY(T0.y), T0.r * z, T0.r * 0.8 * z, 0, 0, 6.3); ctx.fill(); ctx.stroke();      /* свои камни — лиловый круг, а над ним падает камень */
-    const h = (1 - p) * 160 * z, X = rX(T0.x), Y = rY(T0.y) - h, s2 = 9 * z; ctx.fillStyle = X9.rock; ctx.strokeStyle = TSP.out; ctx.beginPath(); ctx.moveTo(X - s2, Y); ctx.lineTo(X - s2 * 0.4, Y - s2); ctx.lineTo(X + s2, Y - s2 * 0.6); ctx.lineTo(X + s2 * 0.7, Y + s2 * 0.7); ctx.lineTo(X - s2 * 0.6, Y + s2 * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke(); return; }
+    const h = (1 - p) * 160 * z, X = rX(T0.x), Y = rY(T0.y) - h, s2 = 9 * z; if (T0.sk) { skRock(T0.sk, X, Y, s2, 1, true); return; }      /* облик: метеорит / раскалённый камень / глыба льда с хвостом */
+    ctx.fillStyle = X9.rock; ctx.strokeStyle = TSP.out; ctx.beginPath(); ctx.moveTo(X - s2, Y); ctx.lineTo(X - s2 * 0.4, Y - s2); ctx.lineTo(X + s2, Y - s2 * 0.6); ctx.lineTo(X + s2 * 0.7, Y + s2 * 0.7); ctx.lineTo(X - s2 * 0.6, Y + s2 * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke(); return; }
+  if (T0.meteor && T0.sk) { const X9 = skx(T0.sk), X0 = rX(T0.x), Y0 = rY(T0.y); ctx.fillStyle = 'rgba(' + X9.on + ',' + (al * 0.55) + ')'; ctx.strokeStyle = 'rgba(' + X9.hvL + ',0.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(X0, Y0, T0.r * z, T0.r * 0.8 * z, 0, 0, 6.3); ctx.fill(); ctx.stroke();      /* метеор в облике: свой круг и своя хвостатая звезда / огненный камень / ледяная комета */
+    const hx = X0 - (1 - p) * 140 * z, hy = Y0 - (1 - p) * 260 * z, s3 = 12 * z; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (let i = 0; i < 4; i++) { ctx.globalAlpha = 0.55 - i * 0.12; ctx.strokeStyle = 'rgba(' + X9.d[Math.min(3, i)] + ',1)'; ctx.lineWidth = s3 * (1.6 - i * 0.3); ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx - (40 + i * 26) * z * 0.47, hy - (40 + i * 26) * z * 0.88); ctx.stroke(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(' + X9.d[0] + ',1)'; ci(ctx, hx, hy, s3 * 0.8); ctx.restore(); skRock(T0.sk, hx, hy, s3 * 0.7, 1, false); return; }
   ctx.fillStyle = 'rgba(229,72,77,' + al + ')'; ctx.strokeStyle = 'rgba(255,120,110,0.95)'; ctx.lineWidth = 2;
   if (T0.k === 'circle') { ctx.beginPath(); ctx.ellipse(rX(T0.x), rY(T0.y), T0.r * z, T0.r * 0.8 * z, 0, 0, 6.3); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,90,80,0.35)'; ctx.beginPath(); ctx.ellipse(rX(T0.x), rY(T0.y), T0.r * z * p, T0.r * 0.8 * z * p, 0, 0, 6.3); ctx.fill(); }
   else if (T0.k === 'cone') { ctx.beginPath(); ctx.moveTo(rX(T0.x), rY(T0.y)); ctx.arc(rX(T0.x), rY(T0.y), T0.len * z, T0.a - T0.half, T0.a + T0.half); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,150,60,0.35)'; ctx.beginPath(); ctx.moveTo(rX(T0.x), rY(T0.y)); ctx.arc(rX(T0.x), rY(T0.y), T0.len * z * p, T0.a - T0.half, T0.a + T0.half); ctx.closePath(); ctx.fill(); }
@@ -8681,6 +8684,7 @@ function rtDrawFx(B, f, t) {
   else if (k === 'tstop') { ctx.globalAlpha = 0.22 * (1 - a * 0.6); ctx.fillStyle = '#9fc8ff'; ctx.fillRect(rX(0), rY(0), RTW * z, RTH * z); ctx.globalAlpha = 0.8 * (1 - a); ctx.strokeStyle = '#d9ecff'; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(X, Y - 20 * z, (30 + i * 26) * z * (0.6 + a * 0.4), 0, 6.3); ctx.stroke(); } }
   else if (k === 'harvest') { const r = (f.r || 160) * z * (0.3 + a * 0.7); ctx.strokeStyle = 'rgba(125,255,200,0.9)'; ctx.lineWidth = 6 * (1 - a) + 1; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.stroke(); ctx.fillStyle = 'rgba(40,20,60,' + (0.25 * (1 - a)) + ')'; ctx.fill(); }
   else if (k === 'whirl' || k === 'rally' || k === 'howl' || k === 'scream' || k === 'slam') { const r = (f.r || 90) * z * (0.5 + a * 0.7); ctx.strokeStyle = k === 'whirl' ? '#fff' : k === 'rally' ? '#ffd870' : k === 'howl' ? '#ffb07a' : '#ff7a6a'; ctx.lineWidth = 5 * (1 - a) + 1; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.stroke(); }
+  else if (k === 'boom' && f.sk) { }      /* метеор в облике — своя вспышка ниже (skFxDeco) */
   else if (k === 'boom') { const D = TSD.fx_explosion_01; if (TS.ready && D) tsBlit(tsCanvas('fx_explosion_01'), D, Math.min(D.n - 1, Math.floor(a * D.n)), X, Y + 30 * z, TSS * z * 1.6 * (f.r || 60) / 60, false, 0); else { ctx.fillStyle = '#ff9a3c'; ci(ctx, X, Y, (f.r || 60) * z * a); } }
   else if (k === 'zap') { ctx.strokeStyle = '#d9ecff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X, Y); const x2 = rX(f.x2), y2 = rY(f.y2); for (let i = 1; i <= 6; i++) { const q = i / 6; ctx.lineTo(X + (x2 - X) * q + (i < 6 ? (Math.random() - 0.5) * 14 : 0), Y + (y2 - Y) * q + (i < 6 ? (Math.random() - 0.5) * 14 : 0)); } ctx.stroke(); }
   else if (k === 'drain' || k === 'chan') { ctx.strokeStyle = k === 'drain' ? 'rgba(255,80,110,0.85)' : 'rgba(120,255,200,0.8)'; ctx.lineWidth = 4; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t * 60; ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(rX(f.x2), rY(f.y2)); ctx.stroke(); ctx.setLineDash([]); }
@@ -8709,6 +8713,7 @@ function rtDrawFx(B, f, t) {
   else if (k === 'bolt') { }      /* молния с неба — поверх грозового сумрака, в elSkyDraw */
   else if (k === 'flash') { }      /* вспышка — поверх ночи, в elSkyDraw */
   else if (k === 'crack' || k === 'trap') { ctx.strokeStyle = k === 'trap' ? '#c8ced8' : TSP.out; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X - 10, Y - 4); ctx.lineTo(X, Y + 4); ctx.lineTo(X + 10, Y - 4); ctx.stroke(); }
+  if (f.sk && SKX_K[k]) skFxDeco(f, k, X, Y, z, a, t);      /* облик мага: у каждого умения свой рисунок поверх (звёзды, огонь, лёд) */
   ctx.globalAlpha = 1;
 }
 function rtDrawPr(B, p, t) {
@@ -8726,6 +8731,9 @@ function rtDrawPr(B, p, t) {
   if (p.k === 'web') { ctx.fillStyle = '#eef3f8'; ci(ctx, X, Y, 5 * z); return; }
   if (p.k === 'log') { ctx.save(); ctx.translate(X, Y); ctx.rotate(t * 8); ctx.fillStyle = '#6b4a32'; ctx.fillRect(-14 * z, -5 * z, 28 * z, 10 * z); ctx.fillStyle = '#a07050'; ci(ctx, 14 * z, 0, 5 * z); ctx.restore(); return; }
   if (p.k === 'spike') { ctx.save(); ctx.translate(X, Y); ctx.rotate(a); ctx.fillStyle = '#e8e2d0'; ctx.beginPath(); ctx.moveTo(10 * z, 0); ctx.lineTo(-8 * z, -3 * z); ctx.lineTo(-8 * z, 3 * z); ctx.closePath(); ctx.fill(); ctx.restore(); return; }
+  if (p.k === 'bolt' && p.sk) { const X9 = skx(p.sk); ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 1; i <= 3; i++) { ctx.globalAlpha = 0.35 - i * 0.08; ctx.fillStyle = 'rgba(' + X9.d[Math.min(3, i)] + ',1)'; ci(ctx, X - Math.cos(a) * i * 8 * z, Y - Math.sin(a) * i * 8 * z, (6 - i) * z); } ctx.restore();      /* обычный удар мага в облике: звезда / уголёк / ледяной осколок */
+    if (p.sk === 'frost') skShard(X, Y, 4 * z, a, 1); else if (p.sk === 'ember') { ctx.fillStyle = 'rgba(255,90,34,0.45)'; ci(ctx, X, Y, 8 * z); skMote('ember', X, Y, 6 * z, 1); } else { ctx.fillStyle = 'rgba(255,214,110,0.35)'; ci(ctx, X, Y, 9 * z); skMote('star', X, Y, 6 * z, 1); }
+    for (let i = 1; i <= 3; i++) skMote(p.sk, X - Math.cos(a) * i * 10 * z + Math.sin(t * 23 + i) * 2 * z, Y - Math.sin(a) * i * 10 * z + Math.cos(t * 19 + i) * 2 * z, (3 - i * 0.6) * z, 0.85 - i * 0.2); return; }      /* след удара */
   ctx.fillStyle = p.k === 'bolt' ? '#b58cff' : '#fff'; ci(ctx, X, Y, 5 * z); ctx.fillStyle = 'rgba(181,140,255,0.35)'; ci(ctx, X, Y, 10 * z);
   if (p.k === 'bolt') { ctx.globalAlpha = 0.3; ctx.fillStyle = '#b58cff'; for (let i = 1; i <= 2; i++) ci(ctx, X - Math.cos(a) * i * 8 * z, Y - Math.sin(a) * i * 8 * z, (5 - i) * z); ctx.globalAlpha = 1; }      // хвост из «бусин» (Kimi 039, п. 9)
 }
@@ -8804,9 +8812,11 @@ function rtNight(B, t, z) {
 function rtGravDraw(B, z, t) {                                                     // тяжесть: лиловый круг у земли, воздух над ним струится вниз
   const R = B.rt; for (const zn of R.zn) { if (zn.k !== 'heavy') continue; const X = rX(zn.cx), Y = rY(zn.cy), r = zn.r * z, left = zn.t1 - R.t, al = Math.min(1, left / 0.6, (R.t - zn.t0) / 0.3), X9 = skx(zn.sk);
     ctx.globalAlpha = 0.24 * al; ctx.fillStyle = X9.hvF; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.fill(); ctx.globalAlpha = 0.7 * al; ctx.strokeStyle = X9.hvS; ctx.lineWidth = Math.max(1.5, 2 * z); ctx.setLineDash([8 * z, 6 * z]); ctx.lineDashOffset = -t * 30; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+    if (zn.sk) { skGround(zn.sk, X, Y, r, al, t, zn.cx + zn.cy); ctx.globalAlpha = 0.7 * al; }      /* облик: созвездие / раскалённые трещины / морозный узор */
     ctx.strokeStyle = 'rgba(' + X9.hvL + ',0.6)'; ctx.lineWidth = Math.max(1, 1.4 * z); ctx.beginPath(); for (let i = 0; i < 12; i++) { const an = i * 2.39, rr = r * Math.sqrt(((i * 37) % 10) / 10), ph = (t * 1.6 + i * 0.13) % 1, x = X + Math.cos(an) * rr, y = Y + Math.sin(an) * rr * 0.8 - (1 - ph) * 40 * z; ctx.moveTo(x, y); ctx.lineTo(x, y + 9 * z); } ctx.stroke(); ctx.globalAlpha = 1; }
   for (const u of B.u) { const k = u.kb; if (!k || !k.fl || u.hp <= 0) continue; const X = rX(u.px), Y = rY(u.py), hz = k.z || 0;      /* невесомость: тень внизу, лиловое свечение вокруг висящего */
-    ctx.globalAlpha = 0.35; ctx.fillStyle = '#1a1430'; ctx.beginPath(); ctx.ellipse(X, Y + 2 * z, 12 * z, 4 * z, 0, 0, 6.3); ctx.fill(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 6 + u.id); ctx.strokeStyle = skx(k.sk).fl; ctx.lineWidth = Math.max(1, 1.6 * z); ctx.beginPath(); ctx.ellipse(X, Y - hz * z * 0.5 - 6 * z, 15 * z, 6 * z, 0, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.globalAlpha = 0.35; ctx.fillStyle = '#1a1430'; ctx.beginPath(); ctx.ellipse(X, Y + 2 * z, 12 * z, 4 * z, 0, 0, 6.3); ctx.fill(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 6 + u.id); ctx.strokeStyle = skx(k.sk).fl; ctx.lineWidth = Math.max(1, 1.6 * z); ctx.beginPath(); ctx.ellipse(X, Y - hz * z * 0.5 - 6 * z, 15 * z, 6 * z, 0, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1;
+    if (k.sk) for (let i = 0; i < 4; i++) { const an = t * 2.2 + i * 1.571 + u.id, x = X + Math.cos(an) * 16 * z, y = Y - hz * z * 0.5 - 6 * z + Math.sin(an) * 6 * z - (k.sk === 'ember' ? ((t * 1.5 + i * 0.25) % 1) * 14 * z : 0); skMote(k.sk, x, y, 2.6 * z, 0.85); } }
 }
 function rtGravOrbit(u, t) {                                                       // маг гравитации: вокруг него медленно кружат камешки (пока не готова своя фигура)
   const z = RTV.z, X = rX(u.px), Y = rY(u.py) - (u.kb ? u.kb.z * z : 0) - 26 * z;
@@ -8822,6 +8832,47 @@ const SKFX = {
   frost: { d: ['236,252,255', '150,226,255', '86,168,232', '58,88,172'], ring: '210,246,255', arc: '160,226,255', band: '190,236,255', spark: '230,250,255', boom: '232,250,255', boom2: '#6ad0ff', hvF: '#1c4870', hvS: '#8ad8ff', hvL: '190,236,255', fl: '#bdeeff', pull: '160,222,255', pullD: '232,250,255', push: '226,246,255', on: '110,200,255', flOn: '214,244,255', rock: '#9cc4dc', dark: ['2,10,20', '4,14,26'], core: '#00040a' }
 };
 function skx(sk) { return SKFX[sk] || SKFX['']; }
+/* ---------- облики: у каждого умения свой рисунок (Звёздный странник — звёзды и золотые хвосты, Багровое затмение — огонь и раскалённый камень, Пепельная пустота — лёд и иней) ---------- */
+const SKX_K = { pull: 1, pushw: 1, heavyOn: 1, floatOn: 1, rockUp: 1, holeBoom: 1, boom: 1 };
+function skMote(sk, x, y, s, al) {                                               // частица облика: звёздочка, искра, снежинка
+  if (al <= 0.02) return; ctx.globalAlpha = Math.min(1, al);
+  if (sk === 'star') { ctx.strokeStyle = '#fff6d8'; ctx.lineWidth = Math.max(1, s * 0.35); ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke(); ctx.fillStyle = '#ffd36a'; ctx.fillRect(x - s * 0.3, y - s * 0.3, s * 0.6, s * 0.6); }
+  else if (sk === 'ember') { ctx.fillStyle = '#ff5a22'; ctx.fillRect(x - s * 0.5, y - s * 0.5, s, s); ctx.fillStyle = '#ffd2a0'; ctx.fillRect(x - s * 0.22, y - s * 0.22, s * 0.44, s * 0.44); }
+  else if (sk === 'frost') { ctx.strokeStyle = '#e4f8ff'; ctx.lineWidth = Math.max(1, s * 0.25); ctx.beginPath(); for (let i = 0; i < 3; i++) { const an = i * 1.047 + 0.3; ctx.moveTo(x - Math.cos(an) * s, y - Math.sin(an) * s); ctx.lineTo(x + Math.cos(an) * s, y + Math.sin(an) * s); } ctx.stroke(); }
+  ctx.globalAlpha = 1;
+}
+function skFlame(x, y, s, al) { if (al <= 0.02) return; ctx.globalAlpha = Math.min(1, al); ctx.fillStyle = '#ff4a18'; ctx.beginPath(); ctx.moveTo(x, y - s * 1.8); ctx.quadraticCurveTo(x + s * 0.9, y - s * 0.4, x, y + s * 0.5); ctx.quadraticCurveTo(x - s * 0.9, y - s * 0.4, x, y - s * 1.8); ctx.fill(); ctx.fillStyle = '#ffc070'; ctx.beginPath(); ctx.moveTo(x, y - s * 0.9); ctx.quadraticCurveTo(x + s * 0.4, y - s * 0.1, x, y + s * 0.3); ctx.quadraticCurveTo(x - s * 0.4, y - s * 0.1, x, y - s * 0.9); ctx.fill(); ctx.globalAlpha = 1; }
+function skShard(x, y, s, r0, al) { if (al <= 0.02) return; ctx.globalAlpha = Math.min(1, al); ctx.fillStyle = '#d6f2ff'; ctx.strokeStyle = '#2a5470'; ctx.lineWidth = Math.max(1, s * 0.2); ctx.beginPath(); ctx.moveTo(x + Math.cos(r0) * s * 1.7, y + Math.sin(r0) * s * 1.7); ctx.lineTo(x + Math.cos(r0 + 1.9) * s * 0.6, y + Math.sin(r0 + 1.9) * s * 0.6); ctx.lineTo(x - Math.cos(r0) * s, y - Math.sin(r0) * s); ctx.lineTo(x + Math.cos(r0 - 1.9) * s * 0.6, y + Math.sin(r0 - 1.9) * s * 0.6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1; }
+function skRock(sk, x, y, s, al, tr) {                                           // камень облика: звёздный — метеорит с золотым хвостом, багровый — раскалённый, пепельный — глыба льда; tr — хвост вверх (падает)
+  ctx.globalAlpha = Math.min(1, al);
+  if (tr) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.globalAlpha = al * (0.5 - i * 0.14); ctx.strokeStyle = sk === 'star' ? '#ffd36a' : sk === 'ember' ? '#ff5a22' : '#bfeaff'; ctx.lineWidth = s * (1.4 - i * 0.4); ctx.beginPath(); ctx.moveTo(x, y - s * 0.4); ctx.lineTo(x - s * (0.6 + i * 0.5), y - s * (3 + i * 2.2)); ctx.stroke(); } ctx.restore(); ctx.globalAlpha = Math.min(1, al); }
+  const pal = sk === 'star' ? ['#2e2a46', '#ffd166'] : sk === 'ember' ? ['#5a2216', '#ff7a3a'] : ['#bfe6ff', '#2a5a7a'];
+  ctx.fillStyle = pal[0]; ctx.strokeStyle = pal[1]; ctx.lineWidth = Math.max(1, s * 0.22); ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x - s * 0.4, y - s); ctx.lineTo(x + s, y - s * 0.6); ctx.lineTo(x + s * 0.7, y + s * 0.7); ctx.lineTo(x - s * 0.6, y + s * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+  if (sk === 'ember') { ctx.fillStyle = '#ffb060'; ctx.fillRect(x - s * 0.2, y - s * 0.35, s * 0.45, s * 0.3); } else if (sk === 'frost') { ctx.fillStyle = '#ffffff'; ctx.fillRect(x - s * 0.5, y - s * 0.6, s * 0.35, s * 0.25); } else if (sk === 'star') { ctx.fillStyle = '#ffe9a8'; ctx.fillRect(x + s * 0.2, y - s * 0.5, s * 0.25, s * 0.25); }
+  ctx.globalAlpha = 1;
+}
+function skFxDeco(f, k, X, Y, z, a, t) {                                          // поверх обычного рисунка умения — своё у облика
+  const sk = f.sk, h = i => ((i * 2654435761) >>> 8 & 1023) / 1023; ctx.save();
+  if (k === 'pull') { const r = f.r * z * (1 - a * 0.85); for (let i = 0; i < 14; i++) { const q = (h(i) + a * 1.6) % 1, rr = r * (1 - q * 0.85), an = h(i + 7) * 6.283 + t * 6 + q * 3, x = X + Math.cos(an) * rr, y = Y + Math.sin(an) * rr * 0.6;
+      if (sk === 'ember') skFlame(x, y, 3 * z, (1 - a) * 0.9); else skMote(sk, x, y, (2.5 + 2 * h(i + 3)) * z, (1 - a) * (0.6 + 0.4 * Math.sin(t * 9 + i))); } }
+  else if (k === 'pushw') { const rr2 = f.len * z * (0.25 + 0.75 * a); for (let i = 0; i <= 12; i++) { const an = f.a - f.half + (i / 12) * f.half * 2, q = rr2 - (i % 3) * 8 * z, x = X + Math.cos(an) * q, y = Y - 14 * z + Math.sin(an) * q * 0.62;
+      if (sk === 'ember') skFlame(x, y, (4 + 2 * h(i)) * z, 1 - a); else if (sk === 'frost') skShard(x, y, (3 + 2 * h(i)) * z, an, 1 - a); else skMote(sk, x, y, (3 + 2 * h(i)) * z, (1 - a) * (0.7 + 0.3 * Math.sin(t * 12 + i))); } }
+  else if (k === 'heavyOn') { const r = f.r * z * (0.6 + 0.4 * a); skGround(sk, X, Y, r, 1 - a, t, f.x + f.y); }
+  else if (k === 'floatOn') { for (let i = 0; i < 16; i++) { const an = i * 2.4, rr = f.r * z * h(i), x = X + Math.cos(an) * rr, y = Y + Math.sin(an) * rr * 0.8 - a * 60 * z * (0.5 + h(i + 2)); if (sk === 'ember') skMote(sk, x, y, 3 * z, (1 - a) * 0.9); else if (sk === 'frost') skMote(sk, x, y, (3 + 2 * h(i + 5)) * z, 1 - a); else skMote(sk, x, y, (2.5 + 2.5 * h(i + 5)) * z, (1 - a) * (0.6 + 0.4 * Math.sin(t * 10 + i))); } }
+  else if (k === 'rockUp') { for (let i = 0; i < 10; i++) { const an = i * 2.39 + f.x * 0.01, rr2 = f.r * z * (0.2 + ((i * 53) % 10) / 12), x = X + Math.cos(an) * rr2 * (1 - a * 0.7), y = Y + Math.sin(an) * rr2 * 0.6 * (1 - a * 0.7) - a * 90 * z - Math.sin(a * Math.PI) * 10 * z; skRock(sk, x, y, (3 + (i % 3)) * z, 1 - a * 0.5, false); } }
+  else if (k === 'holeBoom') { const R2 = f.r * z; for (let i = 0; i < 20; i++) { const an = i * 0.314 + 0.2, dd = R2 * Math.min(1, a * 1.3) * (0.5 + 0.5 * h(i)), x = X + Math.cos(an) * dd, y = Y + Math.sin(an) * dd * 0.8; if (sk === 'ember') skFlame(x, y, 5 * z, 1 - a); else if (sk === 'frost') skShard(x, y, 5 * z, an, 1 - a); else skMote(sk, x, y, 6 * z, 1 - a); }
+    if (sk === 'star' && a < 0.5) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - a * 2; ctx.strokeStyle = '#fff6d8'; ctx.lineWidth = 3 * z; ctx.beginPath(); for (let i = 0; i < 8; i++) { const an = i * 0.785; ctx.moveTo(X, Y); ctx.lineTo(X + Math.cos(an) * R2 * (0.4 + a), Y + Math.sin(an) * R2 * (0.4 + a) * 0.8); } ctx.stroke(); } }
+  else if (k === 'boom') { const r = (f.r || 60) * z, X9 = skx(sk); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, 1 - a * 1.6); ctx.fillStyle = 'rgba(' + X9.boom + ',0.9)'; ci(ctx, X, Y, r * (0.3 + a * 0.6)); ctx.globalAlpha = Math.max(0, 1 - a); ctx.strokeStyle = X9.boom2; ctx.lineWidth = (8 * (1 - a) + 2) * z; ctx.beginPath(); ctx.ellipse(X, Y, r * a * 1.2, r * a * 0.95, 0, 0, 6.3); ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 14; i++) { const an = i * 0.449, dd = r * a * (0.6 + 0.5 * h(i)), x = X + Math.cos(an) * dd, y = Y + Math.sin(an) * dd * 0.8 - Math.sin(a * Math.PI) * 18 * z; if (sk === 'ember') skFlame(x, y, 5 * z, 1 - a); else if (sk === 'frost') skShard(x, y, 5 * z, an, 1 - a); else skMote(sk, x, y, 6 * z, 1 - a); } }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+function skGround(sk, X, Y, r, al, t, seed) {                                    // земля под Тяжестью: созвездие, раскалённые трещины, морозный узор
+  if (al <= 0.02) return; ctx.save(); const h = i => (((i + seed * 13) * 2654435761) >>> 8 & 1023) / 1023;
+  if (sk === 'star') { const P = []; for (let i = 0; i < 7; i++) { const an = h(i) * 6.283, rr = r * (0.2 + 0.7 * h(i + 9)); P.push([X + Math.cos(an) * rr, Y + Math.sin(an) * rr * 0.8]); } ctx.globalAlpha = al * 0.55; ctx.strokeStyle = '#ffd98a'; ctx.lineWidth = 1.2; ctx.beginPath(); P.forEach((p, i) => { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.stroke(); P.forEach((p, i) => skMote(sk, p[0], p[1], 3.5 + 2 * Math.abs(Math.sin(t * 3 + i)), al)); }
+  else if (sk === 'ember') { ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; const pu = 0.65 + 0.35 * Math.sin(t * 4); for (let j = 0; j < 7; j++) { let x = X, y = Y; const an = j * 0.898 + h(j) * 0.4; ctx.globalAlpha = al * pu * 0.8; ctx.strokeStyle = j % 2 ? '#ff6a2a' : '#ffa050'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x, y); for (let q = 1; q <= 4; q++) { const rr = r * 0.85 * q / 4, w = (h(j * 5 + q) - 0.5) * 0.5; x = X + Math.cos(an + w) * rr; y = Y + Math.sin(an + w) * rr * 0.8; ctx.lineTo(x, y); } ctx.stroke(); } ctx.globalAlpha = al * 0.35 * pu; ctx.fillStyle = '#ff5a22'; ctx.beginPath(); ctx.ellipse(X, Y, r * 0.18, r * 0.14, 0, 0, 6.3); ctx.fill(); }
+  else if (sk === 'frost') { ctx.globalAlpha = al * 0.6; ctx.strokeStyle = '#d8f4ff'; ctx.lineWidth = 1.4; ctx.beginPath(); for (let j = 0; j < 6; j++) { const an = j * 1.047 + seed * 0.01, cx = Math.cos(an), cy = Math.sin(an) * 0.8; ctx.moveTo(X, Y); ctx.lineTo(X + cx * r * 0.85, Y + cy * r * 0.85); for (const q of [0.4, 0.65]) { const bx = X + cx * r * q, by = Y + cy * r * q; for (const sgn of [-1, 1]) { const b = an + sgn * 0.6; ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(b) * r * 0.16, by + Math.sin(b) * r * 0.16 * 0.8); } } } ctx.stroke(); }
+  ctx.restore();
+}
 function rtHoleSkin(H, sk, X, Y, Rw, cr, k, z, t, g) {                              // своё у облика: Звёздный странник — звёзды втягиваются и мерцают, Багровое затмение — алый венец, Пепельная пустота — ледяные осколки
   if (!sk || k <= 0) return; g.save(); g.globalCompositeOperation = 'lighter';
   if (sk === 'star') { for (let i = 0; i < 16; i++) { const life = ((i * 0.618) + t * 0.22) % 1, rr = cr * 1.4 + Rw * 0.9 * (1 - life), an = i * 2.4 + t * (0.8 + 3 * (1 - rr / Rw)), x = X + Math.cos(an) * rr * 1.2, y = Y + Math.sin(an) * rr * 0.5, tw = 0.5 + 0.5 * Math.sin(t * 9 + i * 1.7), s2 = (2.5 + 3 * tw) * z * (0.5 + 0.5 * rr / Rw);
@@ -13217,7 +13268,8 @@ mergeStr(STR.ru, {
   skTryWait: 'Примерка ждёт ближайшего боя мага тяжести', skTryUsed: 'Примерка уже была', skNeedGrav: 'Примерить может маг тяжести — переучите мага в Обсерватории',
   skNeedMage: 'Облик — для мага тяжести: нужен маг в городе и Обсерватория', skBuy: 'Купить навсегда', skSoon: 'Покупка появится, когда облик заведут в магазине площадки',
   skArmed: 'Примерка начнётся в ближайшем бою мага тяжести', skRepT: 'Примерка: {n}', skRepP: 'Облик был с вами весь этот бой. Оставить навсегда?', skRepLater: 'Позже',
-  skNow: 'Облик: {n}', skBack: 'Облик снят',
+  skNow: 'Облик: {n}', skBack: 'Облик снят', skFreeS: 'бесплатно', skFreeP: 'Этот облик — бесплатно для всех. Наденьте его!', skFreePr: 'даром',
+  skWearGrav: 'Облик виден на маге тяжести — переучите мага в Обсерватории', skObs: 'Облики мага тяжести — в Лавке', skObsP: 'Пепельная пустота — бесплатно; Звёздный странник и Багровое затмение',
   shopN: { skin_star: 'Облик «Звёздный странник»', skin_ember: 'Облик «Багровое затмение»', skin_frost: 'Облик «Пепельная пустота»', skin_grav3: 'Все три облика мага тяжести' },
   shopD: { skin_star: 'Маг тяжести в полуночной синеве и золоте; дыра с золотым диском', skin_ember: 'Маг тяжести в чёрном с багрянцем; дыра с алым венцом', skin_frost: 'Маг тяжести в пепельной мантии; ледяная дыра', skin_grav3: 'Звёздный странник, Багровое затмение и Пепельная пустота' }
 });
@@ -13230,24 +13282,29 @@ mergeStr(STR.en, {
   skTryWait: 'The try-on waits for the gravity mage’s next battle', skTryUsed: 'Already tried on', skNeedGrav: 'Only a gravity mage can try it — retrain the mage at the Observatory',
   skNeedMage: 'A look for the gravity mage: you need a mage in town and the Observatory', skBuy: 'Buy forever', skSoon: 'The purchase appears once the look is added to the platform store',
   skArmed: 'The try-on starts in the gravity mage’s next battle', skRepT: 'Try-on: {n}', skRepP: 'The look was with you this whole battle. Keep it forever?', skRepLater: 'Later',
-  skNow: 'Look: {n}', skBack: 'Look taken off',
+  skNow: 'Look: {n}', skBack: 'Look taken off', skFreeS: 'free', skFreeP: 'This look is free for everyone. Wear it!', skFreePr: 'free',
+  skWearGrav: 'The look shows on a gravity mage — retrain the mage at the Observatory', skObs: 'Gravity mage looks — in the Shop', skObsP: 'Ashen Void is free; Star Wanderer and Crimson Eclipse',
   shopN: { skin_star: 'Look “Star Wanderer”', skin_ember: 'Look “Crimson Eclipse”', skin_frost: 'Look “Ashen Void”', skin_grav3: 'All three gravity mage looks' },
   shopD: { skin_star: 'The gravity mage in midnight blue and gold; a hole with a golden disk', skin_ember: 'The gravity mage in black and crimson; a hole with a scarlet corona', skin_frost: 'The gravity mage in an ashen robe; an icy hole', skin_grav3: 'Star Wanderer, Crimson Eclipse and Ashen Void' }
 });
 IC.star = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
 
-const SKINS = { star: { cls: 'grav', key: 'hgravstar', prod: 'skin_star' }, ember: { cls: 'grav', key: 'hgravember', prod: 'skin_ember' }, frost: { cls: 'grav', key: 'hgravfrost', prod: 'skin_frost' } };
+const SKINS = { star: { cls: 'grav', key: 'hgravstar', prod: 'skin_star' }, ember: { cls: 'grav', key: 'hgravember', prod: 'skin_ember' }, frost: { cls: 'grav', key: 'hgravfrost', prod: 'skin_frost', free: 1 } };      /* решение Александра 14.11: один облик (на мой выбор — Пепельная пустота) бесплатно, два — по 20 ₽ (цена — в магазине площадки) */
 const SK_IDS = Object.keys(SKINS), SK_SET = 'skin_grav3';
 SK_IDS.forEach(k => { PRODS[SKINS[k].prod] = { ic: 'star', skin: k }; }); PRODS[SK_SET] = { ic: 'star', skins: SK_IDS.slice() };      /* в PRODS (оплата, восстановление купленного), но не в общем списке Лавки — у обликов свой раздел */
+const SK_SET_ON = false;      /* набор «все три» пока не продаём: один облик и так бесплатный */
+function skFree(sk) { return !!SKINS[sk] && !!SKINS[sk].free && !(typeof window !== 'undefined' && window.__skPaid); }      /* __skPaid — для теста платного пути у всех трёх */
 const SK_BETA = typeof location !== 'undefined' && /\/nabat\/beta\//.test(location.pathname);      /* проверочная: витрина и примерка видны и без магазина площадки, купить нельзя, примерка не тратится */
 let skTryEnd = null;
 function skFix() { svFix(); if (!SV.skin || typeof SV.skin !== 'object') SV.skin = {}; if (!SV.skTry || typeof SV.skTry !== 'object') SV.skTry = {}; if (SV.skTrial && !SKINS[SV.skTrial]) SV.skTrial = null; }
-function skOwned(sk) { return !!SKINS[sk] && (owns(SKINS[sk].prod) || owns(SK_SET)); }
+function skOwned(sk) { return !!SKINS[sk] && (skFree(sk) || owns(SKINS[sk].prod) || owns(SK_SET)); }
 function skWorn(cls) { skFix(); const sk = SV.skin[cls]; return sk && SKINS[sk] && skOwned(sk) ? sk : ''; }
 function skWear(sk) { skFix(); if (!skOwned(sk)) return false; SV.skin[SKINS[sk].cls] = sk; save(); return true; }
 function skOff(cls) { skFix(); delete SV.skin[cls]; save(); }
 function skSellable(id) { return !!window.__demo || shopOn(id); }
-function skShown() { return !!window.__demo || SK_BETA || SK_IDS.some(k => skOwned(k) || shopOn(SKINS[k].prod)) || shopOn(SK_SET); }
+function skShown() { return SK_IDS.some(skFree) || !!window.__demo || SK_BETA || SK_IDS.some(k => skOwned(k) || shopOn(SKINS[k].prod)) || shopOn(SK_SET); }
+function skVisible(sk) { return skOwned(sk) || skSellable(SKINS[sk].prod) || SK_BETA; }      /* облик, который нельзя ни взять, ни купить на этой площадке, не показываем */
+function skOrder() { return SK_IDS.filter(skVisible).sort((a, b) => (skFree(b) ? 1 : 0) - (skFree(a) ? 1 : 0)); }      /* бесплатный — первым */
 function skHasGrav() { const h = typeof heroP === 'function' ? heroP() : null; return h && h.hero === 'mage' ? (h.sch === 'grav' ? 2 : 1) : 0; }
 function skTryState(sk) { skFix(); if (skOwned(sk)) return 'own'; if (SV.skTrial === sk) return 'wait'; if (SV.skTry[sk] && !SK_BETA) return 'used'; return skHasGrav() === 2 ? 'can' : skHasGrav() === 1 ? 'needGrav' : 'needMage'; }
 function skTryArm(sk) { if (skTryState(sk) !== 'can') return false; SV.skTrial = sk; save(); return true; }
@@ -13297,11 +13354,13 @@ function skinShow(sk) {                                        // витрина
   SKS.sk = SKINS[sk] ? sk : ''; skFix();
   openModal('skinShow', md => {
     head(md, T('skinsT'), openShop);
-    const seg = el2('div', 'seg skseg'); ['', ...SK_IDS].forEach(k => { const b = el2('button', k === SKS.sk ? 'on' : '', esc(T('skN')[k])); b.dataset.k = 'sk_' + (k || 'base'); b.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(k); }); seg.appendChild(b); }); md.appendChild(seg);
+    const seg = el2('div', 'seg skseg'); ['', ...skOrder()].forEach(k => { const b = el2('button', k === SKS.sk ? 'on' : '', esc(T('skN')[k])); b.dataset.k = 'sk_' + (k || 'base'); b.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(k); }); seg.appendChild(b); }); md.appendChild(seg);
     const dp = Math.min(2, window.devicePixelRatio || 1), cv = document.createElement('canvas'); cv.className = 'skshow'; cv.width = Math.round(320 * dp); cv.height = Math.round(240 * dp); md.appendChild(cv); SKS.show = cv; SKS.t0 = performance.now() / 1000; skKick();
     md.appendChild(el2('p', 'skd', '<b>' + esc(T('skN')[SKS.sk]) + '</b> · ' + esc(T('skD')[SKS.sk])));
     if (!SKS.sk) { md.appendChild(el2('p', 'sknote', esc(T('skinsP')))); return; }
     const own = skOwned(SKS.sk), worn = skWorn('grav') === SKS.sk, st = skTryState(SKS.sk), id = SKINS[SKS.sk].prod;
+    if (skFree(SKS.sk)) md.appendChild(el2('p', 'sknote skfree', esc(T('skFreeP'))));
+    if (own && skHasGrav() !== 2) md.appendChild(el2('p', 'sknote', esc(T(skHasGrav() === 1 ? 'skWearGrav' : 'skNeedMage'))));
     if (own) { const b = btn(worn ? 'btn2' : 'btn', esc(worn ? T('skOff') : T('skWear')), () => { if (worn) { skOff('grav'); toast(T('skBack')); } else { skWear(SKS.sk); toast(fill(T('skNow'), { n: T('skN')[SKS.sk] })); } skinShow(SKS.sk); }); b.dataset.k = worn ? 'skOff' : 'skWear'; md.appendChild(b); }
     else {
       const b = btn('btn skbuy' + (skSellable(id) ? '' : ' off'), svg('star') + esc(T('skBuy')) + ' · ' + esc(skPrice(id)), () => skinBuy(SKS.sk)); b.dataset.k = 'skBuy'; md.appendChild(b);
@@ -13309,14 +13368,14 @@ function skinShow(sk) {                                        // витрина
       if (st === 'can') { const t2 = btn('btn2 sktry', esc(T('skTry')) + ' <small>' + esc(T('skTryP')) + '</small>', () => { if (skTryArm(SKS.sk)) { SND.coin(); toast(T('skArmed')); } skinShow(SKS.sk); }); t2.dataset.k = 'skTry'; md.appendChild(t2); }
       else md.appendChild(el2('p', 'sknote', esc(T({ wait: 'skTryWait', used: 'skTryUsed', needGrav: 'skNeedGrav', needMage: 'skNeedMage' }[st]))));
     }
-    if (!SK_IDS.every(skOwned) && (skSellable(SK_SET) || SK_BETA)) { const o = el2('button', 'opt skset' + (skSellable(SK_SET) ? '' : ' no')); o.dataset.k = 'buy_' + SK_SET; o.innerHTML = '<div class="si">' + svg('star') + '</div><div class="tx"><b>' + esc(T('skSet')) + '</b><span>' + esc(T('skSetP')) + '</span></div><div class="pr">' + esc(skPrice(SK_SET)) + '</div>'; o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); if (!skSellable(SK_SET)) { SND.err(); toast(T('skSoon')); return; } buy(SK_SET); }); md.appendChild(o); }
+    if (SK_SET_ON && !SK_IDS.every(skOwned) && (skSellable(SK_SET) || SK_BETA)) { const o = el2('button', 'opt skset' + (skSellable(SK_SET) ? '' : ' no')); o.dataset.k = 'buy_' + SK_SET; o.innerHTML = '<div class="si">' + svg('star') + '</div><div class="tx"><b>' + esc(T('skSet')) + '</b><span>' + esc(T('skSetP')) + '</span></div><div class="pr">' + esc(skPrice(SK_SET)) + '</div>'; o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); if (!skSellable(SK_SET)) { SND.err(); toast(T('skSoon')); return; } buy(SK_SET); }); md.appendChild(o); }
   });
 }
 function skinShop(md) {                                        // раздел Лавки: три облика с живыми фигурками
   if (!skShown()) return; if (typeof bstWarm === 'function') SK_IDS.forEach(k => { if (h3Has(SKINS[k].key)) bstWarm(SKINS[k].key, ['S'], ['idle', 'cast', 'big']); });      /* витрина откроется уже с кадрами */ skFix(); md.appendChild(el2('div', 'lbl', esc(T('skinsT')))); const list = el2('div', 'list'); const worn = skWorn('grav');
-  SK_IDS.forEach(sk => { const own = skOwned(sk), o = el2('button', 'opt skc' + (own ? ' own' : '')); o.dataset.k = 'skin_' + sk; o.appendChild(skCard(sk));
-    o.appendChild(el2('div', 'tx', '<b>' + esc(T('skN')[sk]) + '</b><span>' + esc(T('skFor')) + (SV.skTrial === sk ? ' · ' + esc(T('skTryWait')) : '') + '</span>'));
-    o.appendChild(el2('div', 'pr', own ? (worn === sk ? esc(T('skWorn')) : svg('check')) : esc(skPrice(SKINS[sk].prod)))); o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(sk); }); list.appendChild(o); });
+  skOrder().forEach(sk => { const own = skOwned(sk), o = el2('button', 'opt skc' + (own ? ' own' : '')); o.dataset.k = 'skin_' + sk; o.appendChild(skCard(sk));
+    o.appendChild(el2('div', 'tx', '<b>' + esc(T('skN')[sk]) + '</b><span>' + esc(T('skFor')) + (skFree(sk) ? ' · ' + esc(T('skFreeS')) : '') + (SV.skTrial === sk ? ' · ' + esc(T('skTryWait')) : '') + '</span>'));
+    o.appendChild(el2('div', 'pr', own ? (worn === sk ? esc(T('skWorn')) : skFree(sk) ? esc(T('skFreePr')) : svg('check')) : esc(skPrice(SKINS[sk].prod)))); o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(sk); }); list.appendChild(o); });
   md.appendChild(list);
 }
 function skinRep(md) {                                         // отчёт о бое после примерки: оставить облик навсегда?
@@ -13324,8 +13383,8 @@ function skinRep(md) {                                         // отчёт о 
   const box = el2('div', 'skrep'); box.appendChild(skCard(sk)); box.appendChild(el2('div', 'tx', '<b>' + esc(fill(T('skRepT'), { n: T('skN')[sk] })) + '</b><span>' + esc(T('skRepP')) + '</span>'));
   const b = btn('mini', esc(T('skBuy')) + ' · ' + esc(skPrice(id)), () => { closeModal(); saveSoon(); skinShow(sk); }); b.dataset.k = 'skRepBuy'; box.appendChild(b); md.appendChild(box);
 }
-(function () { const st = document.createElement('style'); st.textContent = '.md .skseg{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}.md .skseg button{flex:1 1 40%;min-height:34px;padding:4px 8px;border-radius:10px;font-size:12.5px;font-weight:700;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);color:#e8e6f0}.md .skseg button.on{background:rgba(255,216,112,.2);border-color:rgba(255,216,112,.75);color:#ffe9a8}.md canvas.skshow{display:block;width:100%;max-width:420px;aspect-ratio:4/3;height:auto;margin:0 auto 8px;border-radius:14px;border:1px solid rgba(255,255,255,.14)}.md .skd{text-align:left;margin:4px 0 8px}.md .sknote{font-size:12.5px;opacity:.8;margin:4px 0 8px}.md .btn.skbuy{background:linear-gradient(180deg,#e9b949,#a8741c);border-color:#ffe08a;color:#1b1406}.md .btn.skbuy.off{opacity:.55}.md .btn2.sktry{flex-direction:column;gap:2px;line-height:1.15;padding-top:8px;padding-bottom:8px}.md .btn2 small{display:block;font-size:11.5px;opacity:.75;font-weight:600}.md .opt.skc canvas{background:#1d1a26}.md .skrep{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0;padding:8px 10px;border-radius:14px;background:rgba(255,216,112,.1);border:1px solid rgba(255,216,112,.45);text-align:left}.md .skrep canvas{width:54px;height:54px;flex:0 0 54px;border-radius:10px;background:#1d1a26}.md .skrep .tx{flex:1;min-width:0}.md .skrep .tx b{display:block;font-size:14.5px}.md .skrep .tx span{font-size:12.5px;opacity:.8}.md .skrep .mini{flex:1 1 100%;min-height:40px;padding:0 10px;border-radius:10px;background:linear-gradient(180deg,#e9b949,#a8741c);border:1px solid #ffe08a;color:#1b1406;font-weight:800;font-size:12.5px}'; document.head.appendChild(st); })();
-if (typeof DBGX !== 'undefined') Object.assign(DBGX, { SKINS: SKINS, skOwned: skOwned, skWorn: skWorn, skWear: skWear, skOff: skOff, skTryState: skTryState, skTryArm: skTryArm, skinBattle: skinBattle, skinShow: skinShow, skShown: skShown, skFix: skFix });
+(function () { const st = document.createElement('style'); st.textContent = '.md .skseg{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}.md .skseg button{flex:1 1 40%;min-height:34px;padding:4px 8px;border-radius:10px;font-size:12.5px;font-weight:700;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);color:#e8e6f0}.md .skseg button.on{background:rgba(255,216,112,.2);border-color:rgba(255,216,112,.75);color:#ffe9a8}.md canvas.skshow{display:block;width:100%;max-width:420px;aspect-ratio:4/3;height:auto;margin:0 auto 8px;border-radius:14px;border:1px solid rgba(255,255,255,.14)}.md .skd{text-align:left;margin:4px 0 8px}.md .sknote{font-size:12.5px;opacity:.8;margin:4px 0 8px}.md .sknote.skfree{opacity:1;color:#ffe08a;font-weight:700}.md .btn.skbuy{background:linear-gradient(180deg,#e9b949,#a8741c);border-color:#ffe08a;color:#1b1406}.md .btn.skbuy.off{opacity:.55}.md .btn2.sktry{flex-direction:column;gap:2px;line-height:1.15;padding-top:8px;padding-bottom:8px}.md .btn2 small{display:block;font-size:11.5px;opacity:.75;font-weight:600}.md .opt.skc canvas{background:#1d1a26}.md .skrep{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0;padding:8px 10px;border-radius:14px;background:rgba(255,216,112,.1);border:1px solid rgba(255,216,112,.45);text-align:left}.md .skrep canvas{width:54px;height:54px;flex:0 0 54px;border-radius:10px;background:#1d1a26}.md .skrep .tx{flex:1;min-width:0}.md .skrep .tx b{display:block;font-size:14.5px}.md .skrep .tx span{font-size:12.5px;opacity:.8}.md .skrep .mini{flex:1 1 100%;min-height:40px;padding:0 10px;border-radius:10px;background:linear-gradient(180deg,#e9b949,#a8741c);border:1px solid #ffe08a;color:#1b1406;font-weight:800;font-size:12.5px}'; document.head.appendChild(st); })();
+if (typeof DBGX !== 'undefined') Object.assign(DBGX, { skFree: skFree, SKINS: SKINS, skOwned: skOwned, skWorn: skWorn, skWear: skWear, skOff: skOff, skTryState: skTryState, skTryArm: skTryArm, skinBattle: skinBattle, skinShow: skinShow, skShown: skShown, skFix: skFix });
 
 /* ===================== Хозяйство В1: окна рынка, сделок, заказов, своего каравана, лавки диковин; таверна, посевы, оружейная, заём ===================== */
 mergeStr(STR.ru, {
@@ -15112,6 +15171,7 @@ function gravB(md, b) {
   md.appendChild(el2('p', '', esc(T('gravNow', { s: T('gravS')[g ? 'grav' : 'mage'] }))));
   const bt = btn(c.ok ? 'btn' : 'btn off', esc(T(g ? 'gravBackB' : 'gravGo')), () => { const r = gravSwitch(); if (r === 'ok') { toast(T('log')[gravOn(hero()) ? 'gravTo' : 'gravBack'].replace('{nm}', pName(hero()))); refresh(); saveSoon(); } else toast(T('gravWhy')[r] || r); openB(b.id); }); bt.dataset.k = 'gravSw'; md.appendChild(bt);
   md.appendChild(el2('p', c.ok ? 'tip' : 'warn', esc(c.ok ? T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }) : T('gravWhy')[c.why] + ' · ' + T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }))));
+  if (g && typeof skinShow === 'function' && typeof SK_IDS !== 'undefined' && SK_IDS.some(skFree)) { const o = el2('button', 'opt skobs'); o.dataset.k = 'skObs'; o.innerHTML = '<div class="si">' + svg('star') + '</div><div class="tx"><b>' + esc(T('skObs')) + '</b><span>' + esc(T('skObsP')) + '</span></div>'; o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(skWorn('grav') || SK_IDS.find(skFree) || 'star'); }); md.appendChild(o); }      /* маг уже переучен — облики под рукой */
 }
 Object.assign(SND, {      /* чёрная дыра: низкий нарастающий гул, потом глухой удар */
   holeOn: () => { tone(38, 4.6, 'sawtooth', 0.07, 0, 110); tone(76, 4.6, 'sine', 0.06, 0.2, 160); swish(260, 0.12, 0, 4.4); },
