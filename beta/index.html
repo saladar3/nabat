@@ -1645,12 +1645,17 @@ function armyHourly(h) {
   if (G.capt.length && G.t >= (G.ransomT || 0) && h >= 8 && h <= 20) { armyEvent('ransom'); return; }
   if (!hr && !awayHero() && h === 11 && G.t >= (G.heroT || 0) && ((typeof prologHeroDue === 'function' && prologHeroDue()) || (((G.repN || 0) >= 2 || G.day >= 12) && G.people.length >= 8))) armyEvent('heroes');      /* герой пролога приходит на 6-й день */
 }
+const HERO_KINDS = ['war', 'mage', 'necro', 'grav'];
+function mkHeroCand(k, x, y) {                                                    // герой 1-й ступени: воин, маг стихий, некромант или маг тяжести (маг в школе тяжести)
+  const p = mkPerson('soldier'), base = k === 'grav' ? 'mage' : k; p.hero = base; if (k === 'grav') p.sch = 'grav'; p.lv = 1; p.xp = 0; p.mp = 100; p.cds = {}; p.sk.fight = base === 'war' ? 7 : 4; p.look = base === 'war' ? 0 : base === 'mage' ? 1 : 4; p.x = x; p.y = y; return p;
+}
+function hkOf(p) { return !p || !p.hero ? '' : p.hero === 'mage' && p.sch === 'grav' ? 'grav' : p.hero; }      /* класс героя с учётом школы тяжести */
 function armyEvent(id) {
   const E = { id: id };
   if (id === 'heroes') {
-    E.c = ['war', 'mage', 'necro'].map((k, i) => { const p = mkPerson('soldier'); p.hero = k; p.lv = 1; p.xp = 0; p.mp = 100; p.cds = {}; p.sk.fight = k === 'war' ? 7 : 4; p.look = k === 'war' ? 0 : k === 'mage' ? 1 : 4; p.x = 470 + i * 30; p.y = WH - 30; return p; });
+    E.c = HERO_KINDS.map((k, i) => mkHeroCand(k, 470 + i * 30, WH - 30));      /* у ворот все четыре героя (решение Александра 14.11): воин, маг стихий, некромант, маг тяжести — номера 0–2 прежние */
     const P = typeof prologHeroDue === 'function' && prologHeroDue() ? G.prologH : null;      /* выживший в ночь падения прежнего города — первым у ворот, с тем же именем */
-    if (P) { const i0 = ['war', 'mage', 'necro'].indexOf(P.hero); if (i0 > 0) { const q = E.c.splice(i0, 1)[0]; E.c.unshift(q); } const p = E.c[0]; p.nm = P.nm; p.sex = P.sex; p.look = P.look; if (P.cls === 'grav') p.sch = 'grav'; p.ret = 1; E.ret = 1; }
+    if (P) { const i0 = HERO_KINDS.indexOf(P.cls === 'grav' ? 'grav' : P.hero); if (i0 > 0) { const q = E.c.splice(i0, 1)[0]; E.c.unshift(q); } const p = E.c[0]; p.nm = P.nm; p.sex = P.sex; p.look = P.look; p.ret = 1; E.ret = 1; }
     E.c.forEach((p, i) => { let g = 0; while (G.people.concat(E.c.slice(0, i)).some(o => o.sex === p.sex && o.nm === p.nm) && g++ < 40) { if (p.ret) break; p.nm = (p.nm + 1) % NAMES_N; } p.hp = maxHp(p); });
   } else if (id === 'ransom') { if (!G.capt.length) return; E.n = G.capt.length; E.cost = 22 * E.n; E.names = G.capt.map(c => ({ nm: c.p.nm, sex: c.p.sex })); }
   else if (id === 'prisoner') { if (!G.pris) return; E.t = G.pris.t; G.pris.seen = true; }
@@ -1658,7 +1663,7 @@ function armyEvent(id) {
 }
 function armyAnswer(E, i) {
   if (E.id === 'heroes') {
-    if (i >= 0 && i < 3) { const p = E.c[i]; p.mood = 66; G.people.push(p); fixP(p); p.hp = maxHp(p); G.heroT = 0; if (G.prologH) G.prologH.done = 1; log(p.ret ? 'heroBack' : 'heroCame', { nm: p.nm, sex: p.sex, kind: p.hero }); delete p.ret; refresh(); ev('heroCame', p); }
+    if (i >= 0 && i < E.c.length) { const p = E.c[i]; p.mood = 66; G.people.push(p); fixP(p); p.hp = maxHp(p); G.heroT = 0; if (G.prologH) G.prologH.done = 1; log(p.ret ? 'heroBack' : 'heroCame', { nm: p.nm, sex: p.sex, kind: hkOf(p) }); delete p.ret; refresh(); ev('heroCame', p); }
     else G.heroT = G.t + 96;
   } else if (E.id === 'ransom') {
     if (i === 0) { if (G.res.gold < E.cost) return 'res'; G.res.gold -= E.cost; G.capt.forEach(c => comeBack(c.p)); G.capt = []; G.gk.slave = 1; refresh(); }      // платят — значит, придут за новыми
@@ -2005,7 +2010,7 @@ function ruleFame(f) {
   if (G.people.some(q => q.sick > 0)) f.push(['plague', -18]);
   if (countB('bath')) f.push(['bath', 3]); if (healerOn()) f.push(['healer', 3]);
 }
-if (typeof module !== 'undefined' && module.exports) module.exports = { season, toWinter, winterLeft, risks, riskLevel, riskFire, riskPlague, riskBandits, riskTreason, riskFamine, setEdict, startFire, fireCall, startPlague, plagueDay, ruleEvent, appoint, dismiss, setDir, audit, forgive, stewP, stewAssign, stewBuild, setHeir, special, healerOn, SEAS,
+if (typeof module !== 'undefined' && module.exports) module.exports = { HERO_KINDS, mkHeroCand, hkOf, season, toWinter, winterLeft, risks, riskLevel, riskFire, riskPlague, riskBandits, riskTreason, riskFamine, setEdict, startFire, fireCall, startPlague, plagueDay, ruleEvent, appoint, dismiss, setDir, audit, forgive, stewP, stewAssign, stewBuild, setHeir, special, healerOn, SEAS,
   HERO, HLV, BEAST, GOBK, hero, heroCast, heroGo, heroXp, isSoldier, soldiers, undLimit, setUndMode, prisAct, armyEvent, bestSee, maxHp, pdmg, gateShut, patrolPt, hangTrophy, setMil, order, startDrill, answerEvt, makeEvent, GATES, EN2, wallCount, walled, inRing, alCount, gateB, forceRaid, endRaid, planRaid, spawnRaid, refresh, buyRes, feast, newTown, step, build, upgrade, assign, autoAssign, answerReq, attract, avgMood, beds, caps, countB, workersOf, slotsOf, bAtLot, bById, pById, curSite, caravan, checkMs, LOTS, BDEF, MS, HALL_UP, BUILD_LIST, GATE0, get G() { return G; } };
 
 /* ===================== Слой 5: бой отряда — по ходам, поле 9×9 (без DOM) ===================== */
@@ -6316,7 +6321,7 @@ if (typeof module !== 'undefined' && module.exports) Object.assign(module.export
    Решение Александра 13.11: маг гравитации — это переученный маг. Обсерватория открывается, когда в городе есть маг;
    в ней маг переходит в школу тяжести и обратно (за кристаллы и золото). В бою у него свой набор умений (RTAB.grav в 1m_rt.js). */
 Object.assign(BHP, { observ: 200 });
-BDEF.observ = { k: 'lot', cost: { stone: 70, wood: 30, gold: 60 }, wh: 46, need: 2, cond: () => { const h = hero() || (G.land && typeof awayHero === 'function' ? awayHero() : null); return !!h && h.hero === 'mage'; }, condK: 'mage' };
+BDEF.observ = { k: 'lot', cost: { stone: 70, wood: 30, gold: 60 }, wh: 46, need: 2, cond: () => !!(hero() || (G.land && typeof awayHero === 'function' ? awayHero() : null)), condK: 'hero' };      /* 14.11: Обсерватория — при любом герое (в ней же меняют героя) */
 BUILD_LIST.lot.push('observ');
 const GRAV_COST = { crys: 6, gold: 60 };
 function gravOn(p) { return !!p && p.hero === 'mage' && p.sch === 'grav'; }
@@ -6331,7 +6336,34 @@ function gravSwitch() {                                                         
   const c = gravCan(); if (!c.ok) return c.why; const h = hero(); G.res.crys -= GRAV_COST.crys; G.res.gold -= GRAV_COST.gold;
   h.sch = h.sch === 'grav' ? undefined : 'grav'; h.mp = 0; h.cds = {}; if (typeof log === 'function') log(h.sch === 'grav' ? 'gravTo' : 'gravBack', { nm: h.nm, sex: h.sex }); return 'ok';
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { GRAV_COST, gravOn, gravCan, gravSwitch });
+/* ---------- смена героя (решения Александра 14.11): прежний уходит из города, новый приходит сразу — на 1-й ступени ----------
+   Маг стихий ↔ маг тяжести — по-прежнему переучивание (ступень сохраняется). Смена на другой класс — 10 кристаллов и 100 золота.
+   Вещи (артефакты) — у города, остаются. Мертвецы некроманта без него рассыпаются. */
+const HSWAP_COST = { crys: 10, gold: 100 };
+function hswapKinds(p) { const k = hkOf(p); return HERO_KINDS.filter(c => c !== k && !((k === 'mage' || k === 'grav') && (c === 'mage' || c === 'grav'))); }      /* куда можно сменить: не на свой класс и не маг ↔ маг тяжести */
+function hswapCan(kind) {
+  const h = hero(); if (!h) return { ok: false, why: G.land && typeof awayHero === 'function' && awayHero() ? 'away' : 'noHero' };
+  if (!G.b.some(b => b.type === 'observ' && active(b))) return { ok: false, why: 'noObs' };
+  if (G.battle) return { ok: false, why: 'battle' };
+  if (kind != null && hswapKinds(h).indexOf(kind) < 0) return { ok: false, why: 'same' };
+  if ((G.res.crys || 0) < HSWAP_COST.crys || (G.res.gold || 0) < HSWAP_COST.gold) return { ok: false, why: 'cost' };
+  return { ok: true, why: '' };
+}
+function hswap(kind) {                                                            // сменить героя; возвращает 'ok' или причину
+  const c = hswapCan(kind); if (!c.ok) return c.why;
+  const old = hero(), ob = G.b.find(b => b.type === 'observ' && active(b));
+  G.res.crys -= HSWAP_COST.crys; G.res.gold -= HSWAP_COST.gold;
+  if (old.hero === 'necro' && G.und && G.und.length) { for (const u of G.und) if (typeof fx === 'function') fx('dead', u.x, u.y, u.t); G.und = []; log('undFall'); }      /* без некроманта мертвецы рассыпаются */
+  G.people = G.people.filter(q => q !== old); if (old.stew || old.heir) { old.stew = false; old.heir = false; }
+  G.heroGo = null; G.heroT = 0;
+  const p = mkHeroCand(kind, ob ? ob.x : 480, ob ? ob.y + 20 : WH - 30); let g = 0;
+  while ((G.people.some(o => o.sex === p.sex && o.nm === p.nm) || (p.sex === old.sex && p.nm === old.nm)) && g++ < 40) p.nm = (p.nm + 1) % NAMES_N;
+  p.mood = 66; G.people.push(p); fixP(p); if (typeof heroInit === 'function') heroInit(p); p.hp = maxHp(p);
+  if (typeof homes === 'function') homes();
+  log('heroLeft', { nm: old.nm, sex: old.sex }); log('heroCame', { nm: p.nm, sex: p.sex, kind: kind }); refresh(); ev('heroSwap', { old: old, p: p }); ev('heroCame', p);
+  return 'ok';
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { GRAV_COST, gravOn, gravCan, gravSwitch, HSWAP_COST, hswapKinds, hswapCan, hswap });
 
 /* ===================== Стихии, М6: путь мага — Космос или Время (без DOM) =====================
    Решения Александра 14.11.2026: маг стихий на 6-й ступени выбирает ОДИН путь навсегда (сменить — только перерождением: герой
@@ -12054,7 +12086,7 @@ mergeStr(STR.ru, {
     grab: 'Ловец схватил человека: {n}', freed: 'Отбит у ловца: {n}', back: 'Из плена вернулся житель: {n}', captLost: 'Из плена уже не вернётся: {n}',
     pris: 'Стража взяла гоблина живым', prisAsk: 'Пленный заговорил', prisExec: 'Пленного казнили на площади. Гоблины этого не забудут', prisFree: 'Пленного отпустили',
     noPay: 'Страже нечем платить: жалованье не выдано', intel: 'Пленный не соврал: гоблины идут с {s}, будут через {eta} ч', eye: 'Дальний взор, {n}: с {s} {w}. Через {eta} ч', eyeSoon: 'Дальний взор: беда придёт с {s}',
-    evt_heroes: 'У ворот стояли трое странников', evt_ransom: 'Гоблины прислали гонца о пленных', evt_prisoner: 'Решали, что делать с пленным' },
+    evt_heroes: 'У ворот стояли четверо странников', evt_ransom: 'Гоблины прислали гонца о пленных', evt_prisoner: 'Решали, что делать с пленным' },
   heroK: { war: ['Воин', 'Ведёт людей за собой. Стража учится быстрее и дальше, ополчение рядом бьёт сильнее'], mage: ['Маг', 'Бьёт издалека огнём, сковывает льдом и заранее видит беду. Ближнего боя не выдержит'], necro: ['Некромант', 'Поднимает убитых врагов навсегда. Павшие не едят и не спят, но живые их боятся'] },
   ab: { rally: ['Боевой клич', 'Свои в 180 шагах бьют на 40% сильнее целый час и сразу бросаются в бой'], cleave: ['Круговой удар', 'Тройной удар по всем врагам вплотную'], stand: ['Стоять насмерть', 'Враги бросаются на героя, а он получает вдвое меньше урона'],
     fire: ['Огненный шар', 'Бьёт по самой плотной куче врагов в 330 шагах. Чем выше ступень, тем сильнее. 40 силы'], ice: ['Ледяные оковы', 'Все враги в 210 шагах замирают. 35 силы'], eye: ['Дальний взор', 'Показывает, кто и откуда идёт к городу. 40 силы'],
@@ -12083,7 +12115,7 @@ mergeStr(STR.ru, {
   rep: { used: 'Они пришли иначе: {l}', learn: 'Уцелевшие расскажут своим. Ждите: {l}', noneBack: 'Никто не ушёл — рассказать своим некому', kid: 'Уведены в плен: {l}', freedN: 'Отбито у ловцов: {n}', prisR: 'Взят пленный', vets: 'Новое прозвище: {l}', heroUp: 'Герой поднялся на ступень {n}' },
   repHow: { intel: 'пленный на допросе, за {n} ч до набега', mage: 'маг, дальним взором', und: 'павшие у ворот' },
   prisName: 'Пленный', prisT: 'Пленный гоблин', prisHeld: 'В казарме сидит пленный гоблин. Съедает полпайка в день', prisExec: 'Казнить', prisFree: 'Отпустить', captT: 'В плену у гоблинов: {l}',
-  evt: { heroes: ['Трое у ворот', 'Слух о городе, который отбивается, разошёлся далеко. У ворот трое, каждому нужны кров и дело. Останется один — двоим под одной крышей не ужиться.', ['Пусть идут дальше']],
+  evt: { heroes: ['Четверо у ворот', 'Слух о городе, который отбивается, разошёлся далеко. У ворот четверо, каждому нужны кров и дело. Останется один — двоим под одной крышей не ужиться.', ['Пусть идут дальше']],
     ransom: ['Гонец от гоблинов', 'За {l} они хотят {g} золота. Заплатите — вернут, но запомнят, что город платит.', ['Заплатить {g} золота', 'Обменять на пленного гоблина', 'Отказать']],
     prisoner: ['Пленный гоблин', 'Стража взяла его живым и держит в казарме. Он ест полпайка в день и многое знает.', ['Допросить и держать для обмена', 'Казнить на площади', 'Отпустить']] },
   prisAskT: 'Пленный рассказал, чему научился его род, и где собирается следующий отряд. Дозор будет знать заранее.', captNo: 'Пленного нет',
@@ -12103,7 +12135,7 @@ mergeStr(STR.en, {
     grab: 'A slaver seized: {n}', freed: 'Rescued from a slaver: {n}', back: 'Back from captivity: {n}', captLost: 'Will not return from captivity: {n}',
     pris: 'The guard took a goblin alive', prisAsk: 'The prisoner talked', prisExec: 'The prisoner was executed in the square. The goblins will remember', prisFree: 'The prisoner was released',
     noPay: 'Nothing to pay the guard with', intel: 'The prisoner told the truth: goblins from the {s}, here in {eta} h', eye: 'Far sight, {n} — from the {s}: {w}. In {eta} h', eyeSoon: 'Far sight: trouble will come from the {s}',
-    evt_heroes: 'Three wanderers stood at the gate', evt_ransom: 'The goblins sent a messenger about captives', evt_prisoner: 'The prisoner’s fate was decided' },
+    evt_heroes: 'Four wanderers stood at the gate', evt_ransom: 'The goblins sent a messenger about captives', evt_prisoner: 'The prisoner’s fate was decided' },
   heroK: { war: ['Warrior', 'Leads people. The guard trains faster and further, the militia nearby hits harder'], mage: ['Mage', 'Strikes from afar with fire, binds with ice and sees trouble coming. Fragile'], necro: ['Necromancer', 'Raises slain enemies for good. The fallen neither eat nor sleep, but the living fear them'] },
   ab: { rally: ['War cry', 'Allies within 180 paces hit 40% harder for an hour and charge at once'], cleave: ['Whirl strike', 'A triple blow to every enemy at arm’s length'], stand: ['Last stand', 'Enemies rush the hero, and he takes half damage'],
     fire: ['Fireball', 'Hits the densest pack of enemies within 330 paces. Stronger with each rank. 40 power'], ice: ['Ice bonds', 'All enemies within 210 paces freeze. 35 power'], eye: ['Far sight', 'Shows who is coming to the town and from where. 40 power'],
@@ -12132,7 +12164,7 @@ mergeStr(STR.en, {
   rep: { used: 'They came differently: {l}', learn: 'The survivors will tell the others. Expect: {l}', noneBack: 'None got away — nobody to tell the others', kid: 'Carried off: {l}', freedN: 'Rescued from slavers: {n}', prisR: 'A prisoner was taken', vets: 'A new byname: {l}', heroUp: 'The hero reached rank {n}' },
   repHow: { intel: 'a prisoner under questioning, {n} h before the raid', mage: 'the mage, by far sight', und: 'the fallen at the gates' },
   prisName: 'The prisoner', prisT: 'Goblin prisoner', prisHeld: 'A goblin prisoner sits in the barracks. Eats half a ration a day', prisExec: 'Execute', prisFree: 'Release', captT: 'Held by goblins: {l}',
-  evt: { heroes: ['Three at the gate', 'Word of a town that fights back has travelled far. Three stand at the gate, each needing shelter and purpose. Only one will stay — two cannot share one roof.', ['Let them move on']],
+  evt: { heroes: ['Four at the gate', 'Word of a town that fights back has travelled far. Four stand at the gate, each needing shelter and purpose. Only one will stay — two cannot share one roof.', ['Let them move on']],
     ransom: ['A goblin messenger', 'For {l} they want {g} gold. Pay and they return them — but they will remember that the town pays.', ['Pay {g} gold', 'Exchange for the goblin prisoner', 'Refuse']],
     prisoner: ['Goblin prisoner', 'The guard took him alive and holds him in the barracks. He eats half a ration a day and knows a lot.', ['Question and hold for exchange', 'Execute in the square', 'Release']] },
   al: { food2: 'Not enough food and the farms are full — build another', food3: 'Not enough food and no free fields — upgrade the town hall' },
@@ -12281,9 +12313,10 @@ function openHeroes(E) {
   const S = T('evt').heroes;
   openModal('heroes', md => {
     md.appendChild(el2('h2', '', esc(S[0]))); md.appendChild(el2('p', '', esc(S[1])));
-    E.c.forEach((p, i) => { const K = T('heroK')[p.hero], o = el2('button', 'opt hero'); o.dataset.k = p.hero; o.appendChild(heroCanvas(p, 27, 32)); o.appendChild(el2('div', 'tx', '<b>' + esc(T('nm')[p.sex][p.nm % NAMES_N]) + ' · ' + esc(K[0]) + '</b><span>' + esc(K[1]) + '</span>'));
+    const RK = { war: 0, mage: 1, grav: 2, necro: 3 }, ord = E.c.map((p, i) => i).sort((a, b) => (E.c[b].ret ? 1 : 0) - (E.c[a].ret ? 1 : 0) || RK[hkOf(E.c[a])] - RK[hkOf(E.c[b])]);      /* вернувшийся — первым, дальше воин, маги, некромант */
+    ord.forEach(i => { const p = E.c[i], hk = hkOf(p), K = T('heroK')[hk] || T('heroK')[p.hero], o = el2('button', 'opt hero'); o.dataset.k = hk; o.appendChild(heroCanvas(p, 27, 32)); o.appendChild(el2('div', 'tx', '<b>' + esc(T('nm')[p.sex][p.nm % NAMES_N]) + ' · ' + esc(hk === 'mage' && T('heroKE') ? T('heroKE') : K[0]) + '</b><span>' + esc(K[1]) + '</span>'));
       o.addEventListener('click', e => { e.stopPropagation(); audioInit(); answerEvt(i); SND.win(); closeModal(); saveSoon(); hcolKey = ''; }); md.appendChild(o); });
-    md.appendChild(btn('btn2', esc(S[2][0]), () => { answerEvt(3); closeModal(); saveSoon(); }));
+    md.appendChild(btn('btn2', esc(S[2][0]), () => { answerEvt(-1); closeModal(); saveSoon(); }));
   });
 }
 function openRansom(E) {
@@ -15613,14 +15646,14 @@ DBGX.cine = CINE; DBGX.cineSkip = cineSkip; DBGX.bstWarm = bstWarm; DBGX.bstRead
 
 /* ===================== Маг гравитации: лист Обсерватории — переучить мага ===================== */
 mergeStr(STR.ru, {
-  b: { observ: ['Обсерватория', 'Купол для ночных наблюдений. Здесь маг учится тяжести: притягивать и отталкивать, ронять камни и поднимать врагов в воздух.'] },
+  b: { observ: ['Обсерватория', 'Купол для ночных наблюдений. Отсюда зовут нового героя, а маг здесь учится тяжести: притягивать и отталкивать, ронять камни и поднимать врагов в воздух.'] },
   gravT: 'Школа мага', gravNow: 'Сейчас: {s}', gravS: { mage: 'стихии (огонь, лёд, молния)', grav: 'тяжесть (притянуть, оттолкнуть, обвал, невесомость)' },
   gravGo: 'Переучиться: тяжесть', gravBackB: 'Вернуться: стихии', gravCostT: '{c} кристаллов и {g} золота. Мана в первом бою после учёбы — с нуля.',
   gravWhy: { away: 'Маг в походе', noMage: 'Нужен маг', noObs: 'Обсерватория ещё строится', battle: 'Идёт бой', cost: 'Не хватает кристаллов или золота' },
   log: { gravTo: '{n} переучился: теперь маг гравитации', gravBack: '{n} вернулся к стихиям' }
 });
 mergeStr(STR.en, {
-  b: { observ: ['Observatory', 'A dome for night watching. Here the mage learns weight: to pull and push, drop stones and lift foes into the air.'] },
+  b: { observ: ['Observatory', 'A dome for night watching. From here a new hero is called, and here the mage learns weight: to pull and push, drop stones and lift foes into the air.'] },
   gravT: 'Mage school', gravNow: 'Now: {s}', gravS: { mage: 'elements (fire, ice, lightning)', grav: 'gravity (pull, push, rockfall, levitation)' },
   gravGo: 'Retrain: gravity', gravBackB: 'Return: elements', gravCostT: '{c} crystals and {g} gold. Mana starts empty in the first battle after.',
   gravWhy: { away: 'The mage is away', noMage: 'A mage is needed', noObs: 'The observatory is still being built', battle: 'A battle is on', cost: 'Not enough crystals or gold' },
@@ -15628,18 +15661,63 @@ mergeStr(STR.en, {
 });
 mergeStr(STR.ru, { ab: { rock: ['Обвал', 'С неба рушатся камни на самую плотную кучу врагов в 330 шагах. Чем выше ступень, тем сильнее. 40 силы'], heavy: ['Тяжесть', 'Все враги в 210 шагах прижаты к земле и не двигаются. 35 силы'] } });
 mergeStr(STR.en, { ab: { rock: ['Rockfall', 'Stones crash from the sky onto the densest pack of enemies within 330 paces. Stronger with each rank. 40 power'], heavy: ['Weight', 'All enemies within 210 paces are pressed to the ground and cannot move. 35 power'] } });
+mergeStr(STR.ru, {
+  heroK: { grav: ['Маг тяжести', 'Притягивает и отталкивает, роняет камни, поднимает врагов в воздух — и открывает Чёрную дыру'] }, heroKE: 'Маг стихий',
+  hswT: 'Сменить героя', hswNow: 'Сейчас: {n} — {k}, ступень {lv}.', hswP: 'Прежний герой уйдёт из города, новый придёт сразу и начнёт с 1-й ступени. Вещи останутся городу.',
+  hswCost: 'Цена: {c} кристаллов и {g} золота', hswAskT: 'Сменить героя?', hswAsk: '{o} уйдёт из города. Новый герой — {k} — придёт сразу и начнёт с 1-й ступени: умения и опыт прежнего героя не переходят.',
+  hswUnd: 'Мертвецы некроманта ({n}) рассыпятся.', hswGo: 'Сменить героя', hswNo: 'Отмена', hswDone: '{o} покинул город. Новый герой — {k}: {n}',
+  hswWhy: { away: 'Герой в походе', noHero: 'В городе нет героя', noObs: 'Обсерватория ещё строится', battle: 'Идёт бой', cost: 'Не хватает кристаллов или золота', same: 'Это и есть ваш герой' },
+  log: { heroLeft: '{n} покидает город: Обсерватория позвала нового героя' }
+});
+mergeStr(STR.en, {
+  heroK: { grav: ['Gravity mage', 'Pulls and pushes, drops stones, lifts foes into the air — and opens the Black hole'] }, heroKE: 'Elemental mage',
+  hswT: 'Change the hero', hswNow: 'Now: {n} — {k}, rank {lv}.', hswP: 'The current hero will leave the town; the new one arrives at once and starts at rank 1. The items stay with the town.',
+  hswCost: 'Cost: {c} crystals and {g} gold', hswAskT: 'Change the hero?', hswAsk: '{o} will leave the town. The new hero — {k} — arrives at once and starts at rank 1: the old hero’s skills and experience do not carry over.',
+  hswUnd: 'The necromancer’s dead ({n}) will crumble.', hswGo: 'Change the hero', hswNo: 'Cancel', hswDone: '{o} has left the town. The new hero — {k}: {n}',
+  hswWhy: { away: 'The hero is away', noHero: 'There is no hero in town', noObs: 'The observatory is still being built', battle: 'A battle is on', cost: 'Not enough crystals or gold', same: 'This is already your hero' },
+  log: { heroLeft: '{n} leaves the town: the Observatory has called a new hero' }
+});
+function hswName(k) { return k === 'mage' ? T('heroKE') : T('heroK')[k][0]; }
+function hswB(md, b, h) {                                                         // лист Обсерватории: сменить героя на другой класс
+  if (!h) return; const kinds = hswapKinds(h), c = hswapCan(), cost = T('hswCost', { c: HSWAP_COST.crys, g: HSWAP_COST.gold });
+  md.appendChild(el2('div', 'lbl', esc(T('hswT'))));
+  md.appendChild(el2('p', '', esc(T('hswNow', { n: pName(h), k: hswName(hkOf(h)), lv: h.lv || 1 }))));
+  md.appendChild(el2('p', 'tip', esc(T('hswP') + ' ' + cost))); if (!c.ok) md.appendChild(el2('p', 'warn', esc(T('hswWhy')[c.why])));      /* причина — отдельной короткой строкой */
+  const list = el2('div', 'list hswl');
+  for (const k of kinds) { const o = el2('button', 'opt hsw' + (c.ok ? '' : ' no')); o.dataset.k = 'hsw_' + k;
+    o.appendChild(typeof skCard === 'function' ? skCard(typeof skWorn === 'function' ? skWorn(k) || '' : '', k) : el2('div', '', ''));
+    o.appendChild(el2('div', 'tx', '<b>' + esc(hswName(k)) + '</b><span>' + esc(T('heroK')[k][1]) + '</span>'));
+    o.addEventListener('click', e => { e.stopPropagation(); audioInit(); const q = hswapCan(k); if (!q.ok) { SND.err(); toast(T('hswWhy')[q.why]); return; } SND.tap(); hswAsk(k, b); }); list.appendChild(o); }
+  md.appendChild(list);
+}
+function hswAsk(k, b) {                                                          // подтверждение: прежний герой уходит насовсем
+  const h = hero(); if (!h) return; const und = h.hero === 'necro' && G.und ? G.und.length : 0;
+  openModal('hswap', md => {
+    head(md, T('hswAskT'), () => openB(b.id));
+    md.appendChild(el2('p', '', esc(T('hswAsk', { o: pName(h), k: hswName(k) }))));
+    if (und) md.appendChild(el2('p', 'warn', esc(T('hswUnd', { n: und }))));
+    md.appendChild(el2('p', 'tip', esc(T('hswCost', { c: HSWAP_COST.crys, g: HSWAP_COST.gold }))));
+    const go = btn('btn', esc(T('hswGo')), () => { const on = pName(h), r = hswap(k); if (r !== 'ok') { SND.err(); toast(T('hswWhy')[r] || r); openB(b.id); return; }
+      const p = hero(); SND.win(); closeModal(); hcolKey = ''; toast(T('hswDone', { o: on, k: hswName(k), n: pName(p) })); saveSoon(); }); go.dataset.k = 'hswGo'; md.appendChild(go);
+    const no = btn('btn2', esc(T('hswNo')), () => openB(b.id)); no.dataset.k = 'hswNo'; md.appendChild(no);
+  });
+}
 function gravB(md, b) {
   if (b.type !== 'observ' || (b.site && !b.site.to)) return; const h = hero() || (G.land && typeof awayHero === 'function' ? awayHero() : null), g = gravOn(h), c = gravCan();
+  if (!h || h.hero !== 'mage') { hswB(md, b, h); return; }      /* не маг — только смена героя */
   md.appendChild(el2('div', 'lbl', esc(T('gravT'))));
   md.appendChild(el2('p', '', esc(T('gravNow', { s: T('gravS')[g ? 'grav' : 'mage'] }))));
   const bt = btn(c.ok ? 'btn' : 'btn off', esc(T(g ? 'gravBackB' : 'gravGo')), () => { const r = gravSwitch(); if (r === 'ok') { toast(T('log')[gravOn(hero()) ? 'gravTo' : 'gravBack'].replace('{n}', pName(hero()))); refresh(); saveSoon(); } else toast(T('gravWhy')[r] || r); openB(b.id); }); bt.dataset.k = 'gravSw'; md.appendChild(bt);
   md.appendChild(el2('p', c.ok ? 'tip' : 'warn', esc(c.ok ? T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }) : T('gravWhy')[c.why] + ' · ' + T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }))));
   if (g && typeof skinShow === 'function' && typeof SK_IDS !== 'undefined' && SK_IDS.some(k => SKINS[k].cls === 'grav' && skFree(k) && skHas(k))) { const o = el2('button', 'opt skobs'); o.dataset.k = 'skObs'; o.innerHTML = '<div class="si">' + svg('star') + '</div><div class="tx"><b>' + esc(T('skObs')) + '</b><span>' + esc(T('skObsP')) + '</span></div>'; o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(skWorn('grav') || SK_IDS.find(k => SKINS[k].cls === 'grav' && skFree(k)) || 'star'); }); md.appendChild(o); }      /* маг уже переучен — облики под рукой */
+  hswB(md, b, h);      /* и смена героя на другой класс */
 }
 Object.assign(SND, {      /* чёрная дыра: низкий нарастающий гул, потом глухой удар */
   holeOn: () => { tone(38, 4.6, 'sawtooth', 0.07, 0, 110); tone(76, 4.6, 'sine', 0.06, 0.2, 160); swish(260, 0.12, 0, 4.4); },
   holeBoom: () => { swish(140, 0.4, 0, 1.6); tone(48, 1.0, 'sine', 0.42, 0, 24); tone(96, 0.5, 'triangle', 0.18, 0, 40); }
 });
+(function () { const st = document.createElement('style'); st.textContent = '.md .opt.hsw canvas{width:54px;height:54px;flex:0 0 54px;border-radius:10px}'; document.head.appendChild(st); })();
+DBGX.hswap = hswap; DBGX.hswapCan = hswapCan; DBGX.hswapKinds = hswapKinds; DBGX.hkOf = hkOf;
 
 /* ===================== Стихии, М6: путь мага — выбор, карточка героя, строки (расчёт — 1z_path.js, рисунок — 2y_path.js) ===================== */
 mergeStr(STR.ru, {
@@ -15724,7 +15802,7 @@ mergeStr(STR.ru, {
     grav: ['Маг тяжести', 'Притянуть, оттолкнуть, обвал камней — и Чёрная дыра'], necro: ['Некромант', 'Поднимает павших врагов; Армия праха и Жатва'] },
   proTag: 'Ночь набата', proEnd: [['Город пал. Набат умолк.', 'Город пал. Набат умолк.'], ['{n} выжил, но потерял прежнюю силу.', '{n} выжила, но потеряла прежнюю силу.'], ['Прошли годы. На пепелище пришли пятеро переселенцев.', 'Прошли годы. На пепелище пришли пятеро переселенцев.']], proTap: 'Нажмите, чтобы продолжить',
   proTip: ['{n} выжил в ночь падения прежнего города и придёт к воротам на 6-й день.', '{n} выжила в ночь падения прежнего города и придёт к воротам на 6-й день.'], proTipOk: 'Понятно',
-  proRetT: ['{n} вернулся', '{n} вернулась'], proRetP: 'Тот, кто стоял у стены в ночь падения прежнего города, нашёл вас. Прежней силы нет, но есть решимость начать заново. У ворот ещё двое — останется один.', proRetB: ['вернулся', 'вернулась'],
+  proRetT: ['{n} вернулся', '{n} вернулась'], proRetP: 'Тот, кто стоял у стены в ночь падения прежнего города, нашёл вас. Прежней силы нет, но есть решимость начать заново. У ворот ещё трое — останется один.', proRetB: ['вернулся', 'вернулась'],
   rtMsg: { proStart: 'Ночь. Бьёт набат — орда у стен! Нажмите умение, потом коснитесь врагов', proW2: 'Из леса идёт новая волна', proW3: 'Огры и тролли! Гарпии с неба!', proFall: 'Колосс рушит стену!' },
   log: { heroBack: '{n} вернулся к городу — тот самый, что пережил ночь набата' }
 });
@@ -15734,7 +15812,7 @@ mergeStr(STR.en, {
     grav: ['Gravity mage', 'Pull, push, a rockfall — and the Black hole'], necro: ['Necromancer', 'Raises fallen foes; Army of dust and Harvest'] },
   proTag: 'The night of the bell', proEnd: [['The town fell. The bell went silent.', 'The town fell. The bell went silent.'], ['{n} survived, but lost the old strength.', '{n} survived, but lost the old strength.'], ['Years passed. Five settlers came to the ashes.', 'Years passed. Five settlers came to the ashes.']], proTap: 'Tap to continue',
   proTip: ['{n} survived the night the old town fell and will come to the gate on day 6.', '{n} survived the night the old town fell and will come to the gate on day 6.'], proTipOk: 'Got it',
-  proRetT: ['{n} has returned', '{n} has returned'], proRetP: 'The one who stood at the wall the night the old town fell has found you. The old strength is gone, but the will to begin again is not. Two more wait at the gate — only one will stay.', proRetB: ['returned', 'returned'],
+  proRetT: ['{n} has returned', '{n} has returned'], proRetP: 'The one who stood at the wall the night the old town fell has found you. The old strength is gone, but the will to begin again is not. Three more wait at the gate — only one will stay.', proRetB: ['returned', 'returned'],
   rtMsg: { proStart: 'Night. The bell is ringing — the horde is at the walls! Tap a skill, then tap the foes', proW2: 'A new wave comes out of the forest', proW3: 'Ogres and trolls! Harpies from the sky!', proFall: 'The Colossus breaks the wall!' },
   log: { heroBack: '{n} came back to the town — the very one who lived through the night of the bell' }
 });
@@ -15877,7 +15955,7 @@ function finishBoot() {
 window.gameDbg = {
   get G() { return G; }, get state() { return state; }, get modal() { return modal; }, get frames() { return frames; }, get SV() { return SV; }, get adOn() { return adOn; }, get speed() { return speed; }, set speed(v) { speed = v; hudKey = ''; }, get skip() { return skip; }, cam: cam,
   LOTS: LOTS, BDEF: BDEF, MS: MS, build: build, upgrade: upgrade, assign: assign, autoAssign: autoAssign, answerReq: answerReq, attract: attract, avgMood: avgMood, beds: beds, caps: caps, workersOf: workersOf, bAtLot: bAtLot, curSite: curSite, refresh: refresh, feast: feast, buyRes: buyRes, caravan: caravan, order: order, startDrill: startDrill, forceRaid: forceRaid, makeEvent: makeEvent, answerEvt: answerEvt, hangTrophy: hangTrophy, setMil: setMil, GATES: GATES, GATE0: GATE0, wallCount: wallCount, walled: walled, gateB: gateB, alCount: alCount, aware: aware, battleSlow: battleSlow, loadTown: loadTown, packTown: packTown, openDef: openDef, STR: STR, get thrOn() { return thrOn; }, get lang() { return lang; },
-  sim: (hrs, ans) => { const end = G.t + hrs; let g = 0; while (G.t < end - 1e-6 && g++ < 4e6) { if (G.battle) { btAutoAll(G.battle, 60); endBattle(); } if (G.req) { if (ans == null) break; answerReq(ans); } if (G.evt) { if (ans == null) break; const id = G.evt.id; if (answerEvt(id === 'merchant' ? 2 : id === 'minstrel' ? 1 : id === 'refugees' ? (ans ? 0 : 1) : id === 'heroes' ? 3 : id === 'bandits' ? (G.res.gold >= G.evt.cost ? 0 : 1) : id === 'sickTrav' ? 1 : id === 'ransom' ? (G.res.gold >= G.evt.cost ? 0 : 2) : id === 'legacy' || id === 'buyer' || id === 'envoy' || id === 'aid' || id === 'mole' || id === 'spyCaught' ? 1 : id === 'herald' || id === 'conquest' ? 2 : 0) !== 'ok') G.evt = null; } step(G.en.length || G.al.sig ? DT : Math.min(0.05, end - G.t)); } }, hook: (n, a, b) => ev(n, a, b), BUILD_LIST: BUILD_LIST, slotsOf: slotsOf, actOf: actOf, season: season, toWinter: toWinter, winterLeft: winterLeft, risks: risks, riskLevel: riskLevel, setEdict: setEdict, startFire: startFire, fireCall: fireCall, startPlague: startPlague, plagueDay: plagueDay, ruleEvent: ruleEvent, appoint: appoint, dismiss: dismiss, setDir: setDir, audit: audit, forgive: forgive, stewP: stewP, stewAssign: stewAssign, stewBuild: stewBuild, setHeir: setHeir, special: special, healerOn: healerOn, openCouncil: openCouncil, YEAR: YEAR, SL: SL, HERO: HERO, HLV: HLV, BEAST: BEAST, hero: hero, heroCast: heroCast, heroGo: heroGo, heroXp: heroXp, isSoldier: isSoldier, soldiers: soldiers, undLimit: undLimit, setUndMode: setUndMode, prisAct: prisAct, armyEvent: armyEvent, bestSee: bestSee, openHero: openHero, openBest: openBest, pdmg: pdmg, pName: pName, toWorld: toWorld, get heroCmd() { return heroCmd; }, planRaid: planRaid, spawnRaid: spawnRaid, endRaid: endRaid, bById: bById, pById: pById, checkMs: checkMs, gateShut: gateShut, GRAVE: GRAVE, whoStr: whoStr, peace: () => { G.nextRaid = 1e9; G.nextEv = 1e9; G.raid = null; G.howl = true; G.noRisk = true; G.heroT = 1e9; }, openB: openB, openP: openP, openReport: openReport, openEvt: openEvt, spearCap: spearCap, maxHp: maxHp, knowN: knowN, EN2: EN2, sx: sx, sy: sy, isActive: isActive, closeModal: closeModal, startTown: startTown, save: save, setLang: l => { lang = l; hudKey = ''; hintKey = '-'; document.title = T('title'); buildHud(); }, setLastAd: t => { lastAd = t; }, openReq: openReq
+  sim: (hrs, ans) => { const end = G.t + hrs; let g = 0; while (G.t < end - 1e-6 && g++ < 4e6) { if (G.battle) { btAutoAll(G.battle, 60); endBattle(); } if (G.req) { if (ans == null) break; answerReq(ans); } if (G.evt) { if (ans == null) break; const id = G.evt.id; if (answerEvt(id === 'merchant' ? 2 : id === 'minstrel' ? 1 : id === 'refugees' ? (ans ? 0 : 1) : id === 'heroes' ? -1 : id === 'bandits' ? (G.res.gold >= G.evt.cost ? 0 : 1) : id === 'sickTrav' ? 1 : id === 'ransom' ? (G.res.gold >= G.evt.cost ? 0 : 2) : id === 'legacy' || id === 'buyer' || id === 'envoy' || id === 'aid' || id === 'mole' || id === 'spyCaught' ? 1 : id === 'herald' || id === 'conquest' ? 2 : 0) !== 'ok') G.evt = null; } step(G.en.length || G.al.sig ? DT : Math.min(0.05, end - G.t)); } }, hook: (n, a, b) => ev(n, a, b), BUILD_LIST: BUILD_LIST, slotsOf: slotsOf, actOf: actOf, season: season, toWinter: toWinter, winterLeft: winterLeft, risks: risks, riskLevel: riskLevel, setEdict: setEdict, startFire: startFire, fireCall: fireCall, startPlague: startPlague, plagueDay: plagueDay, ruleEvent: ruleEvent, appoint: appoint, dismiss: dismiss, setDir: setDir, audit: audit, forgive: forgive, stewP: stewP, stewAssign: stewAssign, stewBuild: stewBuild, setHeir: setHeir, special: special, healerOn: healerOn, openCouncil: openCouncil, YEAR: YEAR, SL: SL, HERO: HERO, HLV: HLV, BEAST: BEAST, hero: hero, heroCast: heroCast, heroGo: heroGo, heroXp: heroXp, isSoldier: isSoldier, soldiers: soldiers, undLimit: undLimit, setUndMode: setUndMode, prisAct: prisAct, armyEvent: armyEvent, bestSee: bestSee, openHero: openHero, openBest: openBest, pdmg: pdmg, pName: pName, toWorld: toWorld, get heroCmd() { return heroCmd; }, planRaid: planRaid, spawnRaid: spawnRaid, endRaid: endRaid, bById: bById, pById: pById, checkMs: checkMs, gateShut: gateShut, GRAVE: GRAVE, whoStr: whoStr, peace: () => { G.nextRaid = 1e9; G.nextEv = 1e9; G.raid = null; G.howl = true; G.noRisk = true; G.heroT = 1e9; }, openB: openB, openP: openP, openReport: openReport, openEvt: openEvt, spearCap: spearCap, maxHp: maxHp, knowN: knowN, EN2: EN2, sx: sx, sy: sy, isActive: isActive, closeModal: closeModal, startTown: startTown, save: save, setLang: l => { lang = l; hudKey = ''; hintKey = '-'; document.title = T('title'); buildHud(); }, setLastAd: t => { lastAd = t; }, openReq: openReq
 };
 Object.defineProperties(window.gameDbg, Object.getOwnPropertyDescriptors(DBGX));
 
