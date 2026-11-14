@@ -4069,7 +4069,7 @@ function rtStep(B, dt) {
     if (s.burn) { u.bT = (u.bT || 0) - dt; if (u.bT <= 0) { u.bT = 1; rtHurt(B, u, (1.5 + (btM(u).big ? 1.5 : 0)) * RTK, null, { dot: 1, fire: 1 }); } }
     const M = btM(u);
     if (M.regen && u.hp > 0 && !(u.burnT > R.t) && !(u.psnT > R.t)) u.hp = Math.min(u.max, u.hp + M.regen * 0.33 * RTK * (B.night ? 1 : 0.5) * dt);
-    if (u.hero && u.hp > 0) { if (u.hero !== 'war') u.mp = Math.min(u.mpMax || 100, (u.mp || 0) + (u.hero === 'mage' ? 5 : 4) * (u.mpReg || 1) * dt); if (u.side === 0 && typeof heroTick === 'function') heroTick(B, u, dt); }
+    if (u.hero && u.hp > 0) { if (u.hero !== 'war') u.mp = Math.min(u.mpMax || 100, (u.mp || 0) + (u.hero === 'mage' ? 5 : 4) * (u.mpReg || 1) * (typeof pthStars === 'function' && pthStars(B, u) ? 1.6 : 1) * dt); if (u.side === 0 && typeof heroTick === 'function') heroTick(B, u, dt); }
     if (u.und && u.hp > 0) { const hr = rtHeroU(B); if (hr && hr.hero === 'necro' && rtD(u, hr) < rtAura(B, hr) && !u.s.curse) u.hp = Math.min(u.max, u.hp + u.max * 0.015 * dt); if (B.mend && hr && hr.mp > 0) { u.hp = Math.min(u.max, u.hp + u.max * 0.02 * dt); hr.mp = Math.max(0, hr.mp - 0.18 * dt); } }
     if (u.reform != null) { u.reform -= dt; if (u.reform <= 0) rtReform(B, u); }
     if (u.tmp && R.t > u.tmp) { if (u.realm) { u.hp = 0; u.und = false; u.sum = 0; u.tmp = 0; } else { u.out = true; u.gone = 1; } rtFx(B, { k: 'sink', x: u.px, y: u.py }); }
@@ -4079,6 +4079,7 @@ function rtStep(B, dt) {
   if (R.holes && R.holes.length) rtHoleStep(B, dt);      /* чёрная дыра */
   for (const z of R.zn) if (z.k === 'heavy') { if (R.t > z.t1) { z.dead = 1; continue; } for (const f of B.u) { if (f.side === z.side || f.hp <= 0 || f.out || f.inside || Math.hypot(f.px - z.cx, (f.py - z.cy) / 0.8) > z.r) continue; f.s.heavy = 0.25;      /* тяжесть: давит к земле */ if (R.t - (f.hvD || -9) >= 1) { f.hvD = R.t; const a0 = btU(B, z.by); rtHurt(B, f, Math.max(1, Math.round(a0 ? rtDmg(B, a0, f, 0.35, { magic: true }) : 2 * RTK)), a0 || null, { magic: 1, dot: 1 }); }      /* и давит: урон раз в секунду */
     if (btM(f).fly && !f.kb && R.t - (f.hvT || -9) > 3) { f.hvT = R.t; rtPush(f, 0, 0, -60); f.s.stun = Math.max(f.s.stun || 0, 1); } } }      /* летучего роняет на землю */
+  if (typeof pthStep === 'function') pthStep(B, dt);      /* круги пути мага: холодное пламя, застывший миг, замедление */
   R.zn = R.zn.filter(z => !z.dead);
   if (typeof elSim === 'function') elSim(B, dt);      /* стихии: живой огонь, иней и вода шагают вместе с боем */
   { const E = typeof elStep === 'function' ? elStep(B) : null;      /* жар (решение Александра 13.11): огонь поджигает бойца, только если тот простоял в пламени ~0,7 с; пробежал насквозь — не загорелся */
@@ -4096,7 +4097,7 @@ function rtStep(B, dt) {
   for (let i = R.tele.length - 1; i >= 0; i--) { const T0 = R.tele[i]; if (T0.mine && T0.tid && R.t < T0.t1 - 0.3) { const f = btU(B, T0.tid); if (f && f.hp > 0 && !f.out) { const k = Math.min(1, dt * 6); T0.x += (f.px + (T0.ox || 0) - T0.x) * k; T0.y += (f.py + (T0.oy || 0) - T0.y) * k; } }      /* камни мага гравитации ведёт за целью — до последних мгновений */
     if (R.t >= T0.t1) { R.tele.splice(i, 1); rtTeleHit(B, T0); } }
   // снаряды
-  for (let i = R.pr.length - 1; i >= 0; i--) { const p = R.pr[i]; if (p.eaten) { R.pr.splice(i, 1); continue; } const tg = p.tid === -1 ? R.phyl : btU(B, p.tid); const tx = tg ? tg.px : p.tx, ty = tg ? tg.py - 12 : p.ty, dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy), st = p.sp * dt;
+  for (let i = R.pr.length - 1; i >= 0; i--) { const p = R.pr[i]; if (p.eaten) { R.pr.splice(i, 1); continue; } if (p.tz === R.n) continue;      /* застывший миг: стрела висит в воздухе */ const tg = p.tid === -1 ? R.phyl : btU(B, p.tid); const tx = tg ? tg.px : p.tx, ty = tg ? tg.py - 12 : p.ty, dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy), st = p.sp * dt * (p.tl === R.n ? 0.3 : 1);
     if (d <= st + 4) { R.pr.splice(i, 1); if (p.tid === -1) { rtPhylHit(B, p.d); continue; } if (tg && tg.hp > 0 && !tg.out) { const a = btU(B, p.from); rtStrikeRes(B, a, tg, p.d, p.o); if (p.k === 'arrow') { R.bev = R.bev || []; R.bev.push({ e: 'impact', x: p.x, y: p.y, t: R.t, k: 0 }); if (R.bev.length > 40) R.bev.shift(); } } if (p.boom) rtBoom(B, p.x, p.y, p.boom, p.from, p.o); }      // стрела попала — крошечное облачко пыли у цели (Kimi 039, п. 9)
     else { p.x += dx / d * st; p.y += dy / d * st; if (p.o && p.o.pass) { const a = btU(B, p.from); if (a) for (const f of rtFoes(B, a)) if (!(p.hit = p.hit || []).includes(f.id) && Math.hypot(f.px - p.x, f.py - 12 - p.y) < f.r + 8) { p.hit.push(f.id); rtStrikeRes(B, a, f, p.d, p.o); } } } }
   if (typeof bstStep === 'function') bstStep(B, dt);
@@ -4120,11 +4121,11 @@ function rtPick(B, u) {
 function rtWindK(B, u, t) { const R = B.rt; if (!R || !R.ws || !t || t.px == null || u.px == null || u.magic || btM(u).magic) return 1; const dx = t.px - u.px, dy = t.py - u.py, L = Math.hypot(dx, dy) || 1; return 1 + 0.12 * Math.min(1, R.ws) * (dx * Math.cos(R.wa) + dy * Math.sin(R.wa)) / L; }      // стрела по ветру бьёт сильнее, против ветра — слабее (до ±12 %)
 function rtReach(B, u, t) { if (u.rng > 0) { let r = u.rng * RTC * 0.9 - (B.night ? RTC * 0.6 : 0); if (rtZone(B, u.px, u.py) === 'hill') r += RTC * 0.8; return Math.max(RTC * 1.6, r); } return u.r + t.r + 12; }
 function rtZoneFire(B, u) { for (const z of B.rt.zn) if (z.k === 'fire' && z.t1 < 1e8 && u.px > z.x - 4 && u.px < z.x + z.w + 4 && u.py > z.y - 4 && u.py < z.y + z.h + 4) return z; return null; }
-function rtZone(B, x, y) { for (const z of B.rt.zn) if (x > z.x && x < z.x + z.w && y > z.y && y < z.y + z.h && z.k !== 'fire') return z.k; return ''; }
+function rtZone(B, x, y) { for (const z of B.rt.zn) if (x > z.x && x < z.x + z.w && y > z.y && y < z.y + z.h && z.k !== 'fire' && !z.sp) return z.k; return ''; }
 function rtThink(B, u, dt) {
   const R = B.rt, s = u.s, M = btM(u);
   if (u.obj || u.inside) { u.an = 'idle'; return; }
-  u.at += dt; if (u.ac > 0) u.ac -= dt * (s.buff ? 1.25 : 1) * (s.slow ? 0.6 : 1) * (s.heavy ? 0.6 : 1);
+  const pk = typeof pthMul === 'function' ? pthMul(u, 'ac') : 1; u.at += dt * pk; if (u.ac > 0) u.ac -= dt * (s.buff ? 1.25 : 1) * (s.slow ? 0.6 : 1) * (s.heavy ? 0.6 : 1) * pk;      /* pk — ускорение, замедление, старость (путь Времени) */
   if (u.kb) { u.an = 'hurt'; u.vx = u.vy = 0; rtSwCut(u); return; }
   if (u.ba && typeof bstThink === 'function' && bstThink(B, u, dt)) return;
   if (s.stun || s.frz) { u.an = 'hurt'; rtSwCut(u); return; }
@@ -4229,7 +4230,7 @@ function rtSwingTick(B, u) {                                 // true — бое�
 function rtDmg(B, a, t, mul, o) {
   o = o || {}; const M = btM(a), Mt = btM(t), magic = !!(o.magic || a.magic || M.magic); let d = a.d * (mul || 1) * (0.85 + rtR(B) * 0.3);
   if (a.side === 0 && t.side === 1 && typeof bestMul === 'function') d *= bestMul(t.k);      // бестиарий: изученную тварь бьют сильнее
-  if (a.s.buff) d *= 1.4; if (t.s.mark != null) d *= 1.5; if (t.asleep) d *= 2; if (t.s.stand) d *= 0.35; if (t.s.ward) d *= 0.45;
+  if (a.s.buff) d *= 1.4; if (t.s.mark != null) d *= 1.5; if (a.s.aged) d *= 1 - 0.4 * (a.agK || 1); if (t.s.aged) d *= 1 + 0.35 * (t.agK || 1); if (magic && typeof pthStars === 'function' && pthStars(B, a)) d *= 1.2;      /* старение и Сила звёзд (М6) */ if (t.asleep) d *= 2; if (t.s.stand) d *= 0.35; if (t.s.ward) d *= 0.45;
   if (!o.rngd) { for (const q of B.u) if (q !== a && q.side === a.side && q.hp > 0 && !q.out && rtD(q, t) < q.r + t.r + 22 && ((q.px - t.px) * (a.px - t.px) + (q.py - t.py) * (a.py - t.py)) < 0) { d *= Mt.big ? 1.1 : 1.2; if (a.back || M.back) d *= 1.35; break; } }
   else if (!magic) { if (Mt.shield || Mt.bone) d *= 0.4; for (const ob of B.rt.ob) if (ob.k === 'tree' && !ob.burnt && Math.hypot(ob.x - t.px, ob.y - t.py) < 34) { d *= 0.65; break; }      /* обугленный ствол не укрывает */ if (rtZone(B, a.px, a.py) === 'hill') d *= 1.25; }
   if (!o.rngd && a.rng > 0 && !magic) d *= 0.6;
@@ -4267,6 +4268,7 @@ function rtHurt(B, t, d, a, o) {
   if (t.side === 1 && typeof bossDef === 'function') { d = bossDef(B, t, d, a, o); if (d <= 0) return; }
   if (typeof w2Def === 'function') { d = w2Def(B, t, d, a, o); if (d <= 0) return; }
   if (o.cap != null) { d = Math.min(d, o.cap); if (d <= 0) return; }      // потолок удара (чёрная дыра и великие)
+  if (t.s.cst && t.cstG && !o.cst && !o.dot && !o.hole && typeof pthLink === 'function') pthLink(B, t, d, a);      /* созвездие: связанным — половина удара */
   t.hp -= d; t.hitT = B.rt.t; if (t.asleep) t.asleep = false; if (t.ba && typeof bstHurt === 'function') bstHurt(B, t, d, a); if (o.fire && !o.dot) { t.s.burn = Math.max(t.s.burn || 0, 2); if (btM(t).regen) t.burnT = B.rt.t + 6; }
   if (!o.dot) rtFx(B, { k: 'hit', x: t.px, y: t.py - 14, d: Math.round(d), side: t.side, mg: o.magic ? 1 : 0 });
   if (t.hp > 0) { if (t.an !== 'atk') { t.an = 'hurt'; t.at = 0; } return; }
@@ -4311,7 +4313,7 @@ function rtMoveTo(B, u, x, y, dt) {
   const M = btM(u), R = B.rt;
   if (!M.fly && !rtLos(B, u.px, u.py, x, y, Math.min(16, u.r))) { if (!u.wp || (u.wpT || 0) < R.t) { u.wp = rtPath(B, u.px, u.py, x, y); u.wpT = R.t + 0.35; } if (u.wp) { x = u.wp.x; y = u.wp.y; } } else u.wp = null;
   let dx = x - u.px, dy = y - u.py; const d = Math.hypot(dx, dy); if (d < 2) { u.an = 'idle'; u.vx = u.vy = 0; return; }
-  dx /= d; dy /= d; let sp = u.sp * (u.s.slow ? 0.5 : 1) * (u.s.haste ? 1.3 : 1) * (u.s.heavy ? 0.35 : 1); const z = rtZone(B, u.px, u.py);
+  dx /= d; dy /= d; let sp = u.sp * (u.s.slow ? 0.5 : 1) * (u.s.haste ? 1.3 : 1) * (u.s.heavy ? 0.35 : 1) * (typeof pthMul === 'function' ? pthMul(u, 'sp') : 1); const z = rtZone(B, u.px, u.py);
   if ((z === 'swamp' || z === 'water') && !M.fly) sp *= 0.55;
   if (!M.fly && typeof EL !== 'undefined' && EL && EL.B === B && EL.rubN) { const i = elCellAt(EL, u.px, u.py); if (i >= 0 && EL.rub[i] > 120) sp *= 0.75; }      /* по щебню медленнее (пыль вокруг — нет) */
   if (u.side === 0 && u.und) { const h = rtHeroU(B); if (h && rtD(u, h) < rtAura(B, h)) sp *= 1.2; }
@@ -4360,9 +4362,11 @@ function rtInTele(T0, u) {
 function rtTeleHit(B, T0) { const R0 = B.rt, s0 = R0.skCur; if (T0.sk) R0.skCur = T0.sk; try { rtTeleHit0(B, T0); } finally { R0.skCur = s0 || ''; } }      /* удар с неба в облике — и его вспышки в облике */
 function rtTeleHit0(B, T0) {
   const a = btU(B, T0.by); if (a && (a.hp <= 0 || a.out || a.s.stun || a.s.frz)) { if (!T0.swing && !T0.rock) return; }      /* камень в воздухе падает, даже если бросивший оглушён */
+  if (T0.sun && typeof pthSun === 'function') { pthSun(B, T0); return; }      /* солнечный удар (путь Космоса) */
   if (T0.dash && a && a.hp > 0) { let x2 = T0.x2, y2 = T0.y2; if (T0.gore) { const dx = T0.x2 - T0.x, dy = T0.y2 - T0.y, L = Math.hypot(dx, dy) || 1; let hit = null, best = 1e9; for (const ob of B.rt.ob) if ((ob.k === 'rock' || ob.k === 'ice') && rtSeg(ob.x, ob.y, T0.x, T0.y, T0.x2, T0.y2) < ob.r + 18) { const d = Math.hypot(ob.x - T0.x, ob.y - T0.y); if (d < best) { best = d; hit = ob; } } if (hit) { const d = Math.max(0, best - hit.r - 26); x2 = T0.x + dx / L * d; y2 = T0.y + dy / L * d; a.s.stun = 4; rtRockHit(B, hit, a); rtMsg(B, 'minoRock'); rtFx(B, { k: 'txt', x: x2, y: y2 - 50, s: 'stun' }); } } a.px = x2; a.py = y2; }
   if (T0.land && a && a.hp > 0) { a.px = T0.lx; a.py = T0.ly; rtFx(B, { k: 'arrive', x: T0.lx, y: T0.ly }); }
   if (T0.k === 'cone' && T0.fire) { rtFx(B, { k: 'breath', x: T0.x, y: T0.y, a: T0.a, len: T0.len, half: T0.half, dur: 0.7 }); const ex = T0.x + Math.cos(T0.a) * T0.len * 0.6, ey = T0.y + Math.sin(T0.a) * T0.len * 0.6; B.rt.zn.push({ x: ex - 36, y: ey - 36, w: 72, h: 72, k: 'fire', t1: 3 }); }
+  else if (T0.meteor && T0.cold) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r, sk: T0.sk || '', cold: 1 }); B.rt.zn.push({ k: 'cfire', sp: 1, x: T0.x - 80, y: T0.y - 64, w: 160, h: 128, cx: T0.x, cy: T0.y, r: 80, t0: B.rt.t, t1: B.rt.t + 5, by: T0.by, side: T0.side }); }      /* звезда пути Космоса: холодное пламя вместо травяного пожара */
   else if (T0.meteor) { rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r, sk: T0.sk || '' }); B.rt.zn.push({ x: T0.x - 60, y: T0.y - 60, w: 120, h: 120, k: 'fire', t1: 3 }); }
   else if (T0.k === 'cone' && T0.frost) { rtFx(B, { k: 'frostcone', x: T0.x, y: T0.y, a: T0.a, len: T0.len, half: T0.half, dur: 0.05 }); rtDouse(B, (x, y) => rtInTele(T0, { px: x, py: y, r: 0 }), 0, T0.side); }      /* ледяная волна: иней по клину, огонь в нём гаснет */
   else if (T0.k === 'circle') rtFx(B, { k: T0.stun ? 'scream' : 'slam', x: T0.x, y: T0.y, r: T0.r, dur: 0.5 });
@@ -4379,7 +4383,7 @@ function rtTeleHit0(B, T0) {
     if (T0.stun && !(typeof heroStunImm === 'function' && heroStunImm(u))) u.s.stun = T0.quake && (u.s.stand || btM(u).fly) ? 0.2 : T0.stun;
     if (T0.slow) u.s.slow = Math.max(u.s.slow || 0, T0.slow); if (T0.root && !btM(u).fly) u.s.root = T0.root;
     const d = T0.dmg ? Math.round(T0.dmg * (u.s.ward ? 0.45 : 1) * (u.s.stand ? 0.35 : 1)) : a ? rtDmg(B, a, u, (T0.mul || 1) * (side2 ? 0.6 : 1), { rngd: false }) : 5;
-    rtStrikeRes(B, a, u, d, { fire: T0.fire, magic: !!T0.fire, noKb: !!T0.fire });
+    rtStrikeRes(B, a, u, d, { fire: T0.fire, magic: !!(T0.fire || T0.cold), noKb: !!(T0.fire || T0.cold) });
     if (T0.push && u.hp > 0) { const dx = u.px - T0.x, dy = u.py - T0.y, L = Math.hypot(dx, dy) || 1; u.px += dx / L * 40; u.py += dy / L * 40; }
   }
 }
@@ -4443,19 +4447,19 @@ function rtHeroAuto(B, u) {                                  // герой са�
     const bg = fs.slice().sort((a, b) => b.max - a.max)[0], tg = bx && bn >= 2 ? bx : bg;      /* кучка — по кучке, иначе по самому крупному */
     if (rtCan(B, u, 'hole') && ((bx && bn >= 4) || (bg && (bg.boss || bg.ba) && rtD(bg, u) < 650))) rtCast(B, 'hole', bx && bn >= 4 ? { x: bx.px, y: bx.py } : { x: bg.px, y: bg.py });      /* ульта: в гущу или под ноги великому */
     else if (bx && bn >= 3 && rtCan(B, u, 'float')) rtCast(B, 'float', { x: bx.px, y: bx.py }); else if (tg && rtCan(B, u, 'rockfall')) rtCast(B, 'rockfall', { x: tg.px, y: tg.py }); else if (tg && rtCan(B, u, 'weight')) rtCast(B, 'weight', { x: tg.px, y: tg.py }); else if (near.length >= 1 && (u.mp || 0) > 45 && rtCan(B, u, 'push')) rtCast(B, 'push', { x: near[0].px, y: near[0].py }); else if (bx && bn >= 3 && (u.mp || 0) > 85 && rtCan(B, u, 'pull') && rtD(bx, u) > 200) rtCast(B, 'pull', { x: bx.px, y: bx.py }); }      /* мана — прежде всего на камни и тяжесть */
-  else if (u.hero === 'mage') { const t = fs.slice().sort((a, b) => b.max - a.max)[0]; if (rtCan(B, u, 'bolt') && (u.mp || 0) > 40) rtCast(B, 'bolt', { x: t.px, y: t.py }); else if (near.length >= 2 && rtCan(B, u, 'ice')) rtCast(B, 'ice', { x: u.px, y: u.py }); }
+  else if (u.hero === 'mage') { if (typeof pthAuto === 'function' && pthAuto(B, u, fs, near)) return; const t = fs.slice().sort((a, b) => b.max - a.max)[0]; if (rtCan(B, u, 'bolt') && (u.mp || 0) > 40) rtCast(B, 'bolt', { x: t.px, y: t.py }); else if (near.length >= 2 && rtCan(B, u, 'ice')) rtCast(B, 'ice', { x: u.px, y: u.py }); }
   else if (u.hero === 'necro') { const c = B.corp.find(c => c.px != null && Math.hypot(c.px - u.px, c.py - u.py) < 320 && rtUzFree(B) >= uzOf(c.k)); if (c && rtCan(B, u, 'raise')) rtCast(B, 'raise', { c: c }); else if (rtCan(B, u, 'drain') && near.length) rtCast(B, 'drain', { id: near[0].id }); }
 }
 /* ---------- умения героя ---------- */
 const RTAB = {
   war: { slash: { lv: 1, cd: 4 }, rally: { lv: 1, cd: 18 }, stand: { lv: 1, cd: 1 }, whirl: { lv: 2, cd: 7 }, wrath: { lv: 6, cd: 22, demi: 1 }, unshak: { lv: 6, cd: 30, demi: 1 } },
   grav: { pull: { lv: 1, cd: 7, mp: 20 }, push: { lv: 1, cd: 7, mp: 20 }, weight: { lv: 2, cd: 10, mp: 30 }, rockfall: { lv: 3, cd: 8, mp: 30 }, float: { lv: 4, cd: 16, mp: 45 }, hole: { lv: 5, cd: 60, mp: 80 }, meteor: { lv: 6, cd: 20, mp: 60, demi: 1 } },
-  mage: { bolt: { lv: 1, cd: 1.4, mp: 12 }, ward: { lv: 1, cd: 12, mp: 25 }, ice: { lv: 2, cd: 9, mp: 30 }, chain: { lv: 2, cd: 4, mp: 20 }, fog: { lv: 3, cd: 14, mp: 25 }, eye: { lv: 3, cd: 6, mp: 15 }, meteor: { lv: 6, cd: 20, mp: 60, demi: 1 }, tstop: { lv: 6, cd: 30, mp: 50, demi: 1 } },
+  mage: { bolt: { lv: 1, cd: 1.4, mp: 12 }, ward: { lv: 1, cd: 12, mp: 25 }, ice: { lv: 2, cd: 9, mp: 30 }, chain: { lv: 2, cd: 4, mp: 20 }, fog: { lv: 3, cd: 14, mp: 25 }, eye: { lv: 3, cd: 6, mp: 15 }, meteor: { lv: 6, cd: 20, mp: 60, demi: 1, path: 'cos' }, sun: { lv: 6, cd: 16, mp: 45, demi: 1, path: 'cos' }, cfire: { lv: 6, cd: 12, mp: 35, demi: 1, path: 'cos' }, cstl: { lv: 6, cd: 14, mp: 30, demi: 1, path: 'cos' }, tstop: { lv: 6, cd: 30, mp: 50, demi: 1, path: 'time' }, tslow: { lv: 6, cd: 12, mp: 30, demi: 1, path: 'time' }, age: { lv: 6, cd: 10, mp: 30, demi: 1, path: 'time' }, haste: { lv: 6, cd: 25, mp: 45, demi: 1, path: 'time' } },      /* М6: у великого мага стихий — чары одного пути (Космос или Время, 1z_path.js) */
   necro: { raise: { lv: 1, cd: 0.6 }, raiseAll: { lv: 1, cd: 12, mp: 25 }, order: { lv: 1, cd: 0.3 }, call: { lv: 1, cd: 15, mp: 30 }, group: { lv: 1, cd: 4, mp: 12 }, tide: { lv: 1, cd: 2 }, recall: { lv: 1, cd: 3 }, drain: { lv: 2, cd: 6, mp: 15 }, shadow: { lv: 3, cd: 8, mp: 10 }, dusta: { lv: 6, cd: 30, mp: 40, demi: 1 }, harvest: { lv: 6, cd: 20, mp: 30, demi: 1 }, realm: { lv: 6, cd: 60, mp: 80, demi: 1, relic: 'dust' } }
 };
 function rtCls(u) { return u && u.hero === 'mage' && u.sch === 'grav' ? 'grav' : u && u.hero; }      // маг, переученный в Обсерватории, — маг гравитации: свой набор умений
-function rtCan(B, u, ab) { const D = RTAB[rtCls(u)] && RTAB[rtCls(u)][ab]; if (!D) return false; if (G.fairVoice > G.day && (ab === 'rally' || ab === 'call' || ab === 'tide')) return false; if (D.demi && !u.demi) return false; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return false; if ((u.lv || 1) < D.lv && !(B.demi)) return false; if ((u.cdS['ab_' + ab] || 0) > B.rt.t) return false; if (D.mp && (u.mp || 0) < D.mp) return false; return !u.s.stun && !u.s.frz && !u.chan; }
-function rtWhy(B, u, ab) { const D = RTAB[rtCls(u)] && RTAB[rtCls(u)][ab]; if (!D) return 'no'; if (D.demi && !u.demi) return 'demi'; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return 'relic'; if ((u.lv || 1) < D.lv && !B.demi) return 'lv'; if ((u.cdS['ab_' + ab] || 0) > B.rt.t) return 'cd'; if (D.mp && (u.mp || 0) < D.mp) return 'mp'; return 'no'; }
+function rtCan(B, u, ab) { const D = RTAB[rtCls(u)] && RTAB[rtCls(u)][ab]; if (!D) return false; if (D.path && u.mpath !== D.path) return false; if (G.fairVoice > G.day && (ab === 'rally' || ab === 'call' || ab === 'tide')) return false; if (D.demi && !u.demi) return false; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return false; if ((u.lv || 1) < D.lv && !(B.demi)) return false; if ((u.cdS['ab_' + ab] || 0) > B.rt.t) return false; if (D.mp && (u.mp || 0) < D.mp) return false; return !u.s.stun && !u.s.frz && !u.chan; }
+function rtWhy(B, u, ab) { const D = RTAB[rtCls(u)] && RTAB[rtCls(u)][ab]; if (!D) return 'no'; if (D.path && u.mpath !== D.path) return 'path'; if (D.demi && !u.demi) return 'demi'; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return 'relic'; if ((u.lv || 1) < D.lv && !B.demi) return 'lv'; if ((u.cdS['ab_' + ab] || 0) > B.rt.t) return 'cd'; if (D.mp && (u.mp || 0) < D.mp) return 'mp'; return 'no'; }
 function rtSpend(B, u, ab) { u.castAb = ab; const D = RTAB[rtCls(u)][ab]; u.cdS['ab_' + ab] = B.rt.t + D.cd * (typeof heroCdMul === 'function' ? heroCdMul(B, u, ab) : 1); if (D.mp) u.mp -= D.mp; u.an = 'cast'; u.at = 0; B.casts = (B.casts || 0) + 1; }
 function rtUzUsed(B) { let n = B.uzOut || 0; for (const q of B.u) if (q.side === 0 && q.und && q.hp > 0 && !q.out && !q.sum) n += q.uz || uzOf(q.k); for (const s of B.undRes || []) n += s.uz || uzOf(s.k); return n; }      // узы — вся свита: на поле, под землёй, дома
 function rtFieldFree(B) { return Math.max(0, (B.cap || 16) + 2 - rtLive(B, 0).length); }
@@ -4471,6 +4475,7 @@ function rtCast0(B, ab, p) {
   if (ab === 'standOff') { if (!u.s.standH) return 'no'; delete u.s.standH; delete u.s.stand; delete u.s.taunt; u.standUp = B.rt.t; u.s.parry = typeof titleOn === 'function' && titleOn('parrymaster') ? 0.45 : 0.3; return 'ok'; }
   if (!rtCan(B, u, ab)) return rtWhy(B, u, ab);
   const R = B.rt, lv = u.lv || 1; p = p || {};
+  if (RTAB[rtCls(u)][ab].path && ab !== 'meteor' && typeof pthCast === 'function') return pthCast(B, u, ab, p);      /* чары пути мага (М6) */
   if (ab === 'pull') {                                         // притянуть: враги вокруг точки слетаются к ней (тяжёлых тянет слабее)
     const rr = 140 + 6 * lv; let n = 0; for (const f of rtFoes(B, u)) { if (f.obj || f.inside) continue; const dx = p.x - f.px, dy = p.y - f.py, d = Math.hypot(dx, dy); if (d > rr) continue; n++; rtStrike(B, u, f, 0.45, { magic: true, noKb: true, rngd: true }); if (d < 14 || f.hp <= 0) continue;
       const m = rtMass(f), v = Math.min(280, (80 + d * 1.6) / Math.sqrt(m)); if (f.boss || f.ba || m >= 4) rtNudge(f, dx / d * v * 0.5, dy / d * v * 0.5); else { bstPush(f, dx / d * v, dy / d * v, 70 / Math.sqrt(m)); rtSwCut(f); } }
@@ -4526,8 +4531,7 @@ function rtCast0(B, ab, p) {
     rtFx(B, { k: 'wrath', x: u.px, y: u.py, x2: x2, y2: y2, dur: 0.7 }); rtSpend(B, u, ab); return n;
   }
   if (ab === 'unshak') { u.s.unshak = 5; u.s.taunt = 5; rtFx(B, { k: 'ward', x: u.px, y: u.py, r: 40, dur: 5 }); rtSpend(B, u, ab); return 'ok'; }
-  if (ab === 'meteor') { R.tele.push({ k: 'circle', x: p.x, y: p.y, r: 140, t0: R.t, t1: R.t + 1.4, by: u.id, side: 0, dmg: 60 * RTK, fire: 1, meteor: 1, swing: 1, sk: u.skin || '' }); rtSpend(B, u, ab); return 'ok'; }
-  if (ab === 'tstop') { let n = 0; for (const f of rtFoes(B, u)) { f.s.frz = 3.5; n++; } rtFx(B, { k: 'tstop', x: u.px, y: u.py, dur: 3.5 }); rtSpend(B, u, ab); return n; }
+  if (ab === 'meteor') { R.tele.push({ k: 'circle', x: p.x, y: p.y, r: 140, t0: R.t, t1: R.t + 1.4, by: u.id, side: 0, dmg: 60 * RTK, fire: rtCls(u) === 'mage' && u.mpath === 'cos' ? 0 : 1, cold: rtCls(u) === 'mage' && u.mpath === 'cos' ? 1 : 0, meteor: 1, swing: 1, sk: u.skin || '' }); rtSpend(B, u, ab); return 'ok'; }      /* путь Космоса: звезда оставляет холодное пламя */
   if (ab === 'dusta') { for (let i = 0; i < 6; i++) { const q = btAdd(B, { side: 0, k: 'skel', und: true, sum: 1, hp: Math.round(MON.skel.hp * 1.5), d: Math.round(MON.skel.d * 1.3), mv: 3 }); const a = i / 6 * Math.PI * 2; q.px = clamp(u.px + Math.cos(a) * 70, 20, RTW - 20); q.py = clamp(u.py + Math.sin(a) * 50, 20, RTH - 20); q.tmp = R.t + 25; rtUnit(B, q); rtFx(B, { k: 'raise', x: q.px, y: q.py, dur: 0.7 }); } rtSpend(B, u, ab); return 6; }
   if (ab === 'harvest') { const ar = rtAura(B, u); let n = 0; for (const f of rtFoes(B, u)) if (rtD(f, u) < ar) { const d = Math.round((10 + 2 * lv) * RTK); rtHurt(B, f, d, u, { magic: 1 }); u.hp = Math.min(u.max, u.hp + d * 0.5); n++; } for (const c of B.corp.slice()) if (c.px != null && Math.hypot(c.px - u.px, c.py - u.py) < ar && rtUzFree(B) >= uzOf(c.k)) rtRaiseNow(B, u, c, 0); rtFx(B, { k: 'harvest', x: u.px, y: u.py, r: ar, dur: 0.8 }); rtSpend(B, u, ab); return n; }
   if (ab === 'realm') { let n = 0; for (const c of B.corp.splice(0)) { if (c.px == null) continue; const M = MON[c.k] || NOM; const q = btAdd(B, { side: 0, k: c.k, und: true, sum: 1, hp: Math.round((M.hp || 30) * 0.8), d: Math.round((M.d || 8) * 0.9), mv: M.mv || 3, rng: M.rng || 0 }); q.px = c.px; q.py = c.py; q.tmp = R.t + 30; rtUnit(B, q); rtFx(B, { k: 'raise', x: c.px, y: c.py, dur: 0.8 }); n++; }
@@ -4812,7 +4816,7 @@ function heroAllyDown(B, t) {
 function heroBattleStart(B) {
   const p = heroP(); B.artOver = artOver(); B.sulk = {}; if (!p) return;
   const u = B.u.find(q => q.hero); if (!u) return;
-  u.mpMax = heroMpMax(p); u.mpReg = heroMpReg(p); if (p.demi) { u.demi = true; B.demi = true; } if (p.hero === 'necro' && (p.lv || 1) >= 2 && G.mendOn) B.mend = true;
+  u.mpMax = heroMpMax(p); u.mpReg = heroMpReg(p); if (p.demi) { u.demi = true; B.demi = true; } u.mpath = typeof mpathOf === 'function' ? mpathOf(p) : '';      /* путь великого мага (М6) */ if (p.hero === 'necro' && (p.lv || 1) >= 2 && G.mendOn) B.mend = true;
   B.auraAdd = (B.auraAdd || 0) + heroAuraAdd(p); u.sp *= heroSpdMul(B, u);
 }
 function heroBattleEnd(B, t, l, out, res) {
@@ -6083,7 +6087,7 @@ let EL = null;
 function elRnd(E) { let s = E.seed; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; E.seed = (s >>> 0) || 1; return E.seed / 4294967296; }
 function elInit(B, snow) {
   const R = B.rt, w = Math.ceil(RTW / ELC), h = Math.ceil(RTH / ELC), n = w * h;
-  const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), frost: new Uint8Array(n), wet: new Uint8Array(n), inl: new Uint8Array(n), gas: new Uint8Array(n), gas2: new Float32Array(n), tar: new Uint8Array(n), rub: new Uint8Array(n), rubN: 0, hi: new Uint8Array(n), flm: new Uint32Array(n), gasOn: 0, gdirty: 0, zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
+  const E = { B: B, w: w, h: h, n: n, fuel: new Uint8Array(n), fire: new Uint8Array(n), ash: new Uint8Array(n), frost: new Uint8Array(n), wet: new Uint8Array(n), inl: new Uint8Array(n), gas: new Uint8Array(n), gas2: new Float32Array(n), tar: new Uint8Array(n), cold: new Uint8Array(n), cz: new Uint32Array(n), coldOn: 0, rub: new Uint8Array(n), rubN: 0, hi: new Uint8Array(n), flm: new Uint32Array(n), gasOn: 0, gdirty: 0, zone: new Uint32Array(n), list: new Int32Array(ELMAX), cnt: 0,
     t: R.t, acc: 0, tick: 0, bursts: [], seen: new WeakSet(), steam: [], gusts: [], ices: new Map(), fw: 0, seed: ((((B.tid || 1) + 7) * 2654435761) ^ 0x9e3779b9) >>> 0 || 1, wind: 0, dirty: 0, zn: 0, snow: !!snow };
   { const a = elRnd(E) * Math.PI * 2, sw = (B.tr === 'steppe' || B.tr === 'plain' || B.tr === 'meadow' || B.tr === 'hills' ? 0.45 : B.tr === 'forest' ? 0.2 : 0.3) + elRnd(E) * 0.55;      // ветер боя: направление и сила (в лесу тише, в степи сильнее)
     E.wx = Math.cos(a) * sw; E.wy = Math.sin(a) * sw * 0.6; if (R.ws != null) { E.wx = R.wx; E.wy = R.wy; } E.wind = E.wx; }      /* погода боя (elWind) главнее */
@@ -6186,8 +6190,11 @@ function elTick(E) {
     for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(E.h - 1, Math.ceil(cy + r)); y++) for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(E.w - 1, Math.ceil(cx + r)); x++) { const i = y * w + x, dx = (x + 0.5 - cx) / r, dy = (y + 0.5 - cy) / (r * 0.75); if (dx * dx + dy * dy > 0.8 + elHash(i) * 0.4 || E.wet[i] === 255) continue; E.frost[i] = 0; if (E.wet[i] < 225) E.wet[i] = 225; if (elRnd(E) < 0.3) elSteam(E, i); }
     E.fw = 1; E.dirty = 1; }
   if (E.bursts.length) { let q = 0; for (const b of E.bursts) { elPatch(E, b.x, b.y, b.r, b.r * 0.8, st, 1); if (--b.n > 0) E.bursts[q++] = b; } E.bursts.length = q; if (E.bursts.length > 40) E.bursts.splice(0, E.bursts.length - 40); }
+  elColdTick(E, st);      /* М6: холодное пламя пути Космоса */
+  const TZ = R.tz && R.tz.length ? R.tz.map(z => ({ x: z.cx / ELC, y: z.cy / ELC, r2: (z.r / ELC) * (z.r / ELC), stop: z.k === 'tst' })) : null;      /* застывший миг и замедление: огонь в круге стоит или еле шевелится */
   let k = 0; const wx = E.wx || 0, wy = E.wy || 0, dry = E.dry == null ? 1 : E.dry, frost = E.frost, wet = E.wet, n0 = E.cnt; E.dryK = dry * dry; E.flK = Math.min(1, Math.pow(dry, 1.6));      /* весенняя зелень (0,45) тлеет ниже, чем ранит; летняя сушь горит в рост */
-  for (let j = 0; j < n0; j++) { const i = E.list[j]; let f = fire[i]; if (f === 0) { E.inl[i] = 0; continue; }      // 2. горящие клетки: едят траву, разгораются, перекидываются на соседнюю траву
+  for (let j = 0; j < n0; j++) { const i = E.list[j]; let f = fire[i]; if (f === 0) { E.inl[i] = 0; continue; }
+    if (TZ && elTzHold(TZ, i % w + 0.5, ((i / w) | 0) + 0.5, st)) { E.list[k++] = i; continue; }      // 2. горящие клетки: едят траву, разгораются, перекидываются на соседнюю траву
     if (ash[i] < 250) { ash[i] = Math.min(250, ash[i] + (fuel[i] > 0 ? 14 : 5)); E.dirty = 1; }
     const inZ = zone[i] === st;
     const TR = E.tar[i], capG = TR > 0 ? 15 : (8 + elHash(i + 77) * 8) * E.flK, cap = inZ ? Math.max(10 + elHash(i + 77) * 5, capG) : capG;      /* горящая смола — в полный рост */      /* в зоне — колдовской огонь в полный рост; сама трава: зелёная и сырая тлеет низко, сухая горит в рост */
@@ -6219,8 +6226,17 @@ function elTick(E) {
       for (let d = -1; d < 8; d++) { const nx = d < 0 ? x : x + ELDX[d], ny = d < 0 ? y : y + ELDY[d]; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue; const q = ny * w + nx; if (g[q] > 40) { g[q] = 0; flm[q] = st; elLight(E, q, 13); E.gdirty = 1; } } }
     if (st % 2 === 0) elGasStep(E); }
 }
+function elTzHold(TZ, x, y, st) { for (const z of TZ) { const dx = x - z.x, dy = y - z.y; if (dx * dx + dy * dy < z.r2) return z.stop || st % 3 !== 0; } return false; }
+function elColdTick(E, st) {                                                      // холодное пламя: живёт, пока жив круг (вода и иней его не гасят, траву не ест), потом опадает само
+  const R = E.B.rt, w = E.w, h = E.h, C = E.cold, Z = E.cz; let on = 0;
+  for (const z of R.zn) { if (z.k !== 'cfire' || z.dead) continue; on = 1; const cx = z.cx / ELC, cy = z.cy / ELC, rx = z.r / ELC, ry = z.r * 0.8 / ELC;
+    for (let y = Math.max(0, Math.floor(cy - ry - 1)); y <= Math.min(h - 1, Math.ceil(cy + ry + 1)); y++) for (let x = Math.max(0, Math.floor(cx - rx - 1)); x <= Math.min(w - 1, Math.ceil(cx + rx + 1)); x++) { const i = y * w + x, ex = (x + 0.5 - cx) / rx, ey = (y + 0.5 - cy) / ry; if (ex * ex + ey * ey > 0.8 + elHash(i + 41) * 0.4) continue; Z[i] = st; const v = 8 + ((elHash(i + 3) * 7) | 0); if (C[i] < v) C[i] = v; } }
+  if (!on && !E.coldOn) return; let any = on;
+  for (let i = 0; i < E.n; i++) { const c = C[i]; if (!c) continue; if (Z[i] !== st) { C[i] = c > 1 ? c - 1 : 0; if (C[i]) any = 1; } else any = 1; }
+  E.coldOn = any;
+}
 function elNeed(B) {                                                              // есть ли в бою хоть что-то для сетки: огонь, стужа, лёд (иначе сетку и не заводим)
-  const R = B.rt; if (R.storm) return true; for (const z of R.zn) if (elZoneOn(z)) return true; for (const o of R.ob) if (o.k === 'ice') return true;
+  const R = B.rt; if (R.storm) return true; for (const z of R.zn) if (elZoneOn(z) || z.k === 'cfire') return true; for (const o of R.ob) if (o.k === 'ice') return true;
   if (R.fx) for (const f of R.fx) if ((f.k === 'boom' && f.fire) || f.k === 'ice' || f.k === 'frostcone') return true;
   if (B.tars > 0 && !R.tarDone && R.ph === 'run') return true; if (R.dec) for (const d of R.dec) if (d.br) return true; if (R.fx) for (const f of R.fx) if (f.k === 'miasma' || f.k === 'venomcone') return true; return false;
 }
@@ -6310,6 +6326,96 @@ function gravSwitch() {                                                         
   h.sch = h.sch === 'grav' ? undefined : 'grav'; h.mp = 0; h.cds = {}; if (typeof log === 'function') log(h.sch === 'grav' ? 'gravTo' : 'gravBack', { nm: h.nm, sex: h.sex }); return 'ok';
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { GRAV_COST, gravOn, gravCan, gravSwitch });
+
+/* ===================== Стихии, М6: путь мага — Космос или Время (без DOM) =====================
+   Решения Александра 14.11.2026: маг стихий на 6-й ступени выбирает ОДИН путь навсегда (сменить — только перерождением: герой
+   возвращается на три ступени ниже и выбирает заново). Путь виден на фигуре мага (знак пути) и в карточке героя.
+   Космос: Звездопад (теперь оставляет холодное пламя), Солнечный удар (ночью — лунный луч: слабее, но ослепляет), Холодное пламя
+   (сине-лиловое, водой не тушится, горит и на снегу, и на льду, гаснет само), Созвездие (до пяти врагов связаны нитями — удар по одному
+   достаётся всем), Сила звёзд (сама: ночью мана копится быстрее, чары сильнее).
+   Время: Застывший миг (круг: враги, их стрелы и снаряды и даже огонь в нём стоят), Замедление (в круге всё еле движется), Старение
+   (враг дряхлеет: слабее бьёт, хуже держит удар; великие — вполсилы), Ускорение (свой отряд бегает и бьёт в полтора раза чаще).
+   Маг тяжести (переученный в Обсерватории) — свой набор умений; путь хранится и вернётся, когда маг вернётся к стихиям. */
+const MPATH = { cos: ['meteor', 'sun', 'cfire', 'cstl', 'stars'], time: ['tstop', 'tslow', 'age', 'haste'] };
+function mpathOf(p) { return p && p.hero === 'mage' && (p.mpath === 'cos' || p.mpath === 'time') ? p.mpath : ''; }
+function mpathNeed(p) { return !!p && p.hero === 'mage' && (p.lv || 1) >= 6 && !mpathOf(p); }      // великий маг стихий, а путь ещё не выбран
+function mpathPick(p, k) {
+  if (!p || p.hero !== 'mage') return 'no'; if ((p.lv || 1) < 6) return 'lv'; if (mpathOf(p)) return 'done'; if (k !== 'cos' && k !== 'time') return 'no';
+  p.mpath = k; if (typeof log === 'function') log(k === 'cos' ? 'mpathCos' : 'mpathTime', { nm: p.nm, sex: p.sex }); if (typeof ev === 'function') ev('mpath', p); return 'ok';
+}
+/* ---------- в бою ---------- */
+function pthMul(u, k) {                                                           // множители движения (k='sp'), замаха и отката (k='ac') от чар пути
+  const s = u.s; if (!s) return 1; let m = 1;
+  if (s.tslow) m *= 0.4; if (s.thaste) m *= k === 'sp' ? 1.45 : 1.5; if (s.aged) m *= 1 - (k === 'sp' ? 0.25 : 0.3) * (u.agK || 1); if (k === 'sp' && s.chill) m *= 0.7;
+  return m;
+}
+function pthStars(B, u) { return !!(B && B.night && u && u.hero === 'mage' && u.sch !== 'grav' && u.mpath === 'cos'); }      // Сила звёзд: ночь и путь Космоса
+function pthCast(B, u, ab, p) {
+  const R = B.rt, lv = u.lv || 1, lk = Math.max(0, lv - 6);
+  const near = (r, n) => rtFoes(B, u).filter(f => !f.obj && f.px != null && Math.hypot(f.px - p.x, f.py - p.y) < r + (f.r || 10) * 0.5).sort((a, b) => Math.hypot(a.px - p.x, a.py - p.y) - Math.hypot(b.px - p.x, b.py - p.y)).slice(0, n);
+  if (ab === 'sun') {                                                             // солнечный удар: через миг с неба бьёт столп (ночью — лунный луч)
+    R.tele.push({ k: 'sun', x: clamp(p.x, 30, RTW - 30), y: clamp(p.y, 30, RTH - 20), r: 80 + 3 * lk, t0: R.t, t1: R.t + 0.9, by: u.id, side: u.side, sun: 1, moon: B.night ? 1 : 0, swing: 1 }); rtSpend(B, u, ab); return 'ok'; }
+  if (ab === 'cfire') {                                                           // холодное пламя: круг сине-лилового огня на 6 с
+    const r = 86 + 3 * lk; R.zn.push({ k: 'cfire', sp: 1, x: p.x - r, y: p.y - r * 0.8, w: r * 2, h: r * 1.6, cx: p.x, cy: p.y, r: r, t0: R.t, t1: R.t + 6, by: u.id, side: u.side });
+    rtFx(B, { k: 'cfireOn', x: p.x, y: p.y, r: r, dur: 0.7 }); rtSpend(B, u, ab); return 'ok'; }
+  if (ab === 'cstl') {                                                            // созвездие: до пяти врагов у точки связаны нитями на 9 с
+    const fs = near(220, 5); if (fs.length < 2) return 'none'; const g = R.cstN = (R.cstN || 0) + 1;
+    for (const f of fs) { f.s.cst = 9 + 0.5 * lk; f.cstG = g; } rtFx(B, { k: 'cstOn', x: p.x, y: p.y, ids: fs.map(f => f.id), dur: 1 }); rtSpend(B, u, ab); return fs.length; }
+  if (ab === 'tstop') {                                                           // застывший миг: в круге время стоит 4 с — враги, их стрелы и снаряды, огонь
+    const r = 150 + 4 * lk, d = 4 + 0.2 * lk; let n = 0; R.zn.push({ k: 'tst', sp: 1, x: p.x - r, y: p.y - r, w: r * 2, h: r * 2, cx: p.x, cy: p.y, r: r, t0: R.t, t1: R.t + d, side: u.side });
+    for (const f of rtFoes(B, u)) if (f.px != null && Math.hypot(f.px - p.x, f.py - p.y) < r + (f.r || 10) * 0.3) { f.s.frz = Math.max(f.s.frz || 0, d); f.tsT = R.t; rtSwCut(f); n++; }
+    rtFx(B, { k: 'tstop', x: p.x, y: p.y, r: r, dur: d }); rtSpend(B, u, ab); return n || 'ok'; }
+  if (ab === 'tslow') {                                                           // замедление: в круге 7 с всё еле движется
+    const r = 160 + 4 * lk; R.zn.push({ k: 'tsl', sp: 1, x: p.x - r, y: p.y - r, w: r * 2, h: r * 2, cx: p.x, cy: p.y, r: r, t0: R.t, t1: R.t + 7, side: u.side });
+    rtFx(B, { k: 'tslowOn', x: p.x, y: p.y, r: r, dur: 0.8 }); rtSpend(B, u, ab); return 'ok'; }
+  if (ab === 'age') {                                                             // старение: до трёх врагов у точки дряхлеют на 12 с
+    const fs = near(95, 3); if (!fs.length) return 'none';
+    for (const f of fs) { f.s.aged = 12 + lk; f.agK = f.boss || f.ba || btM(f).big || rtMass(f) >= 4 ? 0.5 : 1; rtFx(B, { k: 'ageOn', x: f.px, y: f.py, dur: 1.2 }); } rtSpend(B, u, ab); return fs.length; }
+  if (ab === 'haste') {                                                           // ускорение: весь свой отряд на 6 с
+    let n = 0; for (const q of rtLive(B, u.side)) { q.s.thaste = 6 + 0.5 * lk; n++; } rtFx(B, { k: 'hasteOn', x: u.px, y: u.py, r: 280, dur: 0.9 }); rtSpend(B, u, ab); return n; }
+  return 'no';
+}
+function pthSun(B, T0) {                                                          // столп солнца: огромный урон и огонь; лунный луч — слабее, ослепляет, без огня
+  const R = B.rt, a = btU(B, T0.by), moon = !!T0.moon; let n = 0;
+  rtFx(B, { k: 'sunbeam', x: T0.x, y: T0.y, r: T0.r, moon: moon ? 1 : 0, dur: 0.9 });
+  for (const f of B.u) { if (f.side === T0.side || f.hp <= 0 || f.out || f.px == null) continue; if (Math.hypot(f.px - T0.x, (f.py - T0.y) / 0.85) > T0.r + (f.r || 10) * 0.5) continue; n++;
+    const d = a ? rtDmg(B, a, f, moon ? 1.9 : 4.2, { magic: true, rngd: true }) : Math.round((moon ? 18 : 40) * RTK); rtStrikeRes(B, a, f, d, { magic: 1, fire: moon ? 0 : 1, noKb: 1, rngd: true });
+    if (moon && f.hp > 0 && !(typeof heroStunImm === 'function' && heroStunImm(f))) { f.s.stun = Math.max(f.s.stun || 0, 1.8); f.s.blind = 1.8; rtSwCut(f); } }
+  if (!moon) { R.zn.push({ x: T0.x - 45, y: T0.y - 45, w: 90, h: 90, k: 'fire', t1: 2.5 }); rtFx(B, { k: 'boom', x: T0.x, y: T0.y, r: T0.r, fire: 1, sun: 1 }); }
+  else rtFx(B, { k: 'flash', x: T0.x, y: T0.y, dur: 0.35 });
+  if (typeof bstShake === 'function') bstShake(B, moon ? 0.12 : 0.25); return n;
+}
+function pthLink(B, t, d, a) {                                                    // созвездие: связанные нитями получают половину удара по любому из них
+  const R = B.rt, g = t.cstG; let n = 0;
+  for (const q of B.u) { if (q === t || q.cstG !== g || !q.s.cst || q.hp <= 0 || q.out) continue; rtHurt(B, q, Math.max(1, Math.round(d * 0.5)), a, { magic: 1, cst: 1 }); n++; }
+  if (n && R.t - (t.cstFx || -9) > 0.18) { t.cstFx = R.t; rtFx(B, { k: 'cstHit', id: t.id, g: g, dur: 0.35 }); }
+}
+function pthStep(B, dt) {                                                         // круги пути: холодное пламя жжёт, в застывшем миге и в замедлении стоят (еле движутся) враги, их стрелы, их удары с неба
+  const R = B.rt; let tz = null;
+  if (!R.pthIn) { R.pthIn = 1; const h = rtHeroU(B); if (h && h.side === 0 && pthStars(B, h)) rtMsg(B, 'stars'); }      /* ночь и путь Космоса — сказать про Силу звёзд */
+  for (const z of R.zn) {
+    if (!z.sp) continue; if (R.t > z.t1) { z.dead = 1; continue; }
+    if (z.k === 'cfire') { const a0 = btU(B, z.by);
+      for (const f of B.u) { if (f.side === z.side || f.hp <= 0 || f.out || f.inside || f.px == null || btM(f).fly) continue; if (Math.hypot(f.px - z.cx, (f.py - z.cy) / 0.8) > z.r + (f.r || 10) * 0.4) continue;
+        f.s.chill = 0.35; if (R.t - (f.cfT || -9) >= 0.5) { f.cfT = R.t; rtHurt(B, f, Math.max(1, a0 ? rtDmg(B, a0, f, 0.34, { magic: true, rngd: true }) : Math.round(3 * RTK)), a0 || null, { magic: 1, dot: 1, cold: 1 }); } } }
+    else if (z.k === 'tst' || z.k === 'tsl') { const stop = z.k === 'tst'; (tz = tz || []).push(z);
+      for (const f of B.u) { if (f.side === z.side || f.hp <= 0 || f.out || f.px == null) continue; if (Math.hypot(f.px - z.cx, f.py - z.cy) > z.r + (f.r || 10) * 0.3) continue;
+        if (stop) { if (!(f.s.frz > 0.1)) rtSwCut(f); f.s.frz = Math.max(f.s.frz || 0, 0.12); f.tsT = R.t; } else f.s.tslow = Math.max(f.s.tslow || 0, 0.15); }
+      for (const p of R.pr) { if (p.tid === -1) continue; const a = btU(B, p.from); if (a && a.side === z.side) continue; if (Math.hypot(p.x - z.cx, p.y - z.cy) > z.r) continue; if (stop) p.tz = R.n; else p.tl = R.n; }
+      for (const T0 of R.tele) if (T0.side !== z.side && Math.hypot(T0.x - z.cx, T0.y - z.cy) < z.r) T0.t1 += stop ? dt : dt * 0.6; }
+  }
+  R.tz = tz;
+}
+function pthAuto(B, u, fs, near) {                                                // «Сам»: великий маг пользуется чарами своего пути — из избытка маны (на огненные шары остаётся 40)
+  const P = u.mpath; if (!P || !u.demi || u.sch === 'grav') return false; const R = B.rt;
+  let bx = null, bn = 0; for (const f of fs) { let k = 0; for (const g of fs) if (Math.hypot(g.px - f.px, (g.py - f.py) / 0.8) < 100) k++; if (k > bn) { bn = k; bx = f; } }
+  const bg = fs.slice().sort((a, b) => b.max - a.max)[0], big = !!bg && (bg.boss || bg.ba || btM(bg).big || rtMass(bg) >= 4);
+  const rs = ab => (u.mp || 0) >= ((RTAB.mage[ab] || {}).mp || 0) + 40, go = (ab, q, free) => { if (!rtCan(B, u, ab) || (!free && !rs(ab))) return false; const r = rtCast(B, ab, q); return typeof r === 'number' || r === 'ok'; };
+  const at = f => ({ x: f.px, y: f.py }), zNear = (k, f) => R.zn.some(z => z.k === k && !z.dead && Math.hypot(z.cx - f.px, z.cy - f.py) < z.r * 0.7);
+  if (P === 'cos') return (bx && (bn >= 3 || big) && go('sun', bn >= 3 ? at(bx) : at(bg))) || (bx && bn >= 3 && go('meteor', at(bx))) || (bx && bn >= 3 && !fs.some(f => f.s.cst > 1) && go('cstl', at(bx))) || (bx && bn >= 2 && !zNear('cfire', bx) && go('cfire', at(bx)));
+  return (bx && (bn >= 4 || (near.length >= 2 && u.hp < u.max * 0.5)) && go('tstop', at(bx), u.hp < u.max * 0.5)) || ((bn >= 3 || big) && rtLive(B, u.side).length >= 3 && go('haste', {})) || (big && !(bg.s.aged > 2) && go('age', at(bg))) || (bx && bn >= 3 && !zNear('tsl', bx) && go('tslow', at(bx))) || (bx && bn >= 2 && !(bx.s.aged > 2) && go('age', at(bx)));
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { MPATH, mpathOf, mpathNeed, mpathPick, pthMul, pthStars, pthCast, pthSun, pthLink, pthStep, pthAuto, rtDmg, rtHeroAuto });
 
 /* ===================== Отрисовка города ===================== */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -8677,7 +8783,7 @@ function rtDrawOb(B, ob, t) {
 
   ctx.fillStyle = ob.k === 'rock' ? '#8a8f99' : '#3c7a3a'; ci(ctx, X, Y, ob.r * z);
 }
-function rtDrawTele(B, T0) { if (T0.sk && SKF[T0.sk]) { ctx.save(); ctx.filter = SKF[T0.sk]; rtDrawTele0(B, T0); ctx.restore(); return; } rtDrawTele0(B, T0); }      /* круг удара с неба в облике — в его цвете */
+function rtDrawTele(B, T0) { if (T0.sun && typeof pthTeleDraw === 'function') { if (T0.sk && SKF[T0.sk]) { ctx.save(); ctx.filter = SKF[T0.sk]; pthTeleDraw(B, T0, B.rt.t); ctx.restore(); } else pthTeleDraw(B, T0, B.rt.t); return; } if (T0.sk && SKF[T0.sk]) { ctx.save(); ctx.filter = SKF[T0.sk]; rtDrawTele0(B, T0); ctx.restore(); return; } rtDrawTele0(B, T0); }      /* круг удара с неба в облике — в его цвете */
 function rtDrawTele0(B, T0) {
   const R = B.rt, p = clamp((R.t - T0.t0) / Math.max(0.05, T0.t1 - T0.t0), 0, 1), z = RTV.z, al = 0.18 + p * 0.32;
   if (T0.mine) { const X9 = skx(T0.sk); ctx.fillStyle = 'rgba(' + X9.on + ',' + (al * 0.7) + ')'; ctx.strokeStyle = 'rgba(' + X9.hvL + ',0.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(rX(T0.x), rY(T0.y), T0.r * z, T0.r * 0.8 * z, 0, 0, 6.3); ctx.fill(); ctx.stroke();      /* свои камни — лиловый круг, а над ним падает камень */
@@ -8696,11 +8802,12 @@ function rtDrawFx(B, f, t) {
   if (k === 'hit' && R.holes && R.holes.some(H => Math.hypot(f.x - H.x, f.y - H.y) < 90)) return;
   const skf = f.sk && SKF[f.sk] && !SKX_NOF[k]; if (skf) { ctx.save(); ctx.filter = SKF[f.sk]; }      /* облик героя: вспышка умения — в его цвете */      /* у сердца чёрной дыры цифры не мельтешат */      // в кино — без цифр урона и надписей
   ctx.globalAlpha = Math.max(0, 1 - a);
-  if (k === 'hit') { ctx.fillStyle = f.side ? (f.mg ? '#b58cff' : '#fff3b0') : '#ff8b7a'; ctx.font = '800 ' + Math.round(12 + 3 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; const yy = Y - a * 26; ctx.strokeText(f.d, X, yy); ctx.fillText(f.d, X, yy); }
+  const pd = typeof pthFxDraw === 'function' && pthFxDraw(B, f, t, a, X, Y, z);      /* чары пути мага (М6) */
+  if (pd) { }
+  else if (k === 'hit') { ctx.fillStyle = f.side ? (f.mg ? '#b58cff' : '#fff3b0') : '#ff8b7a'; ctx.font = '800 ' + Math.round(12 + 3 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; const yy = Y - a * 26; ctx.strokeText(f.d, X, yy); ctx.fillText(f.d, X, yy); }
   else if (k === 'txt') { const s = f.s === 'yrs' ? T('rtYrs', { n: f.n }) : (T('rtTxt')[f.s] || f.s); ctx.fillStyle = f.s === 'fear' ? '#ffb07a' : f.s === 'yrs' ? '#c9a0ff' : '#ffe27a'; ctx.font = '800 ' + Math.round(11 + 3 * z) + 'px system-ui,Arial'; ctx.textAlign = 'center'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3; ctx.strokeText(s, X, Y - a * 20); ctx.fillText(s, X, Y - a * 20); }
   else if (k === 'slash') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 7 * z * (1 - a) + 1; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(X, Y - 14 * z); ctx.lineTo(rX(f.x2), rY(f.y2) - 14 * z); ctx.stroke(); ctx.strokeStyle = 'rgba(160,220,255,0.8)'; ctx.lineWidth = 2; ctx.stroke(); }
   else if (k === 'wrath') { ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,226,122,0.95)'; ctx.lineWidth = 26 * z * (1 - a) + 2; ctx.beginPath(); ctx.moveTo(X, Y - 14 * z); ctx.lineTo(rX(f.x2), rY(f.y2) - 14 * z); ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 8 * z * (1 - a) + 1; ctx.stroke(); }
-  else if (k === 'tstop') { ctx.globalAlpha = 0.22 * (1 - a * 0.6); ctx.fillStyle = '#9fc8ff'; ctx.fillRect(rX(0), rY(0), RTW * z, RTH * z); ctx.globalAlpha = 0.8 * (1 - a); ctx.strokeStyle = '#d9ecff'; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(X, Y - 20 * z, (30 + i * 26) * z * (0.6 + a * 0.4), 0, 6.3); ctx.stroke(); } }
   else if (k === 'harvest') { const r = (f.r || 160) * z * (0.3 + a * 0.7); ctx.strokeStyle = 'rgba(125,255,200,0.9)'; ctx.lineWidth = 6 * (1 - a) + 1; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.stroke(); ctx.fillStyle = 'rgba(40,20,60,' + (0.25 * (1 - a)) + ')'; ctx.fill(); }
   else if (k === 'whirl' || k === 'rally' || k === 'howl' || k === 'scream' || k === 'slam') { const r = (f.r || 90) * z * (0.5 + a * 0.7); ctx.strokeStyle = k === 'whirl' ? '#fff' : k === 'rally' ? '#ffd870' : k === 'howl' ? '#ffb07a' : '#ff7a6a'; ctx.lineWidth = 5 * (1 - a) + 1; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.stroke(); }
   else if (k === 'boom' && f.sk) { }      /* метеор в облике — своя вспышка ниже (skFxDeco) */
@@ -8770,7 +8877,7 @@ function renderRt(t) {
   if (typeof artWarmBattle === 'function') { if (RTV.warmB !== B) { RTV.warmB = B; ARTQ.length = 0; artWarmBattle(B); } if (ARTQ.length) artWarmTick(4); }
   ctx.fillStyle = '#16261a'; ctx.fillRect(0, 0, W, H);
   const z = RTV.z, bg = rtBgBuild(B); tsSmooth(z); ctx.drawImage(bg, RTV.ox, RTV.oy, RTW * z, RTH * z); ctx.imageSmoothingEnabled = true;
-  const ELs = typeof elStep === 'function' ? elStep(B0) : null; if (ELs) { elGround(ELs, z); elGasDraw(ELs, z); }      /* стихии: сетка шагает в бою (elSim); здесь — гарь, сырость и иней под ногами настоящего боя (не записи для кино) */
+  const ELs = typeof elStep === 'function' ? elStep(B0) : null; if (ELs) { elGround(ELs, z); elGasDraw(ELs, z); if (typeof elColdDraw === 'function') elColdDraw(ELs, t); }      /* стихии: сетка шагает в бою (elSim); здесь — гарь, сырость и иней под ногами настоящего боя (не записи для кино) */
   // огонь и туман на земле, ловушки, тела
   for (const zn of R.zn) { if (zn.k !== 'fire') continue;
     const D = TSD.fx_fire_03; if (!(ELs && elZoneOn(zn))) for (let i = 0; i < 4; i++) { const x = zn.x + zn.w * (0.25 + (i % 2) * 0.5), y = zn.y + zn.h * (0.3 + (i >> 1) * 0.45); if (TS.ready && D) tsBlit(tsCanvas('fx_fire_03'), D, Math.floor(t * 12 + i * 3), rX(x), rY(y), TSS * z * 1.8, false, 0); else { ctx.fillStyle = '#ff7a1a'; ci(ctx, rX(x), rY(y), 8 * z); } }
@@ -8784,6 +8891,7 @@ function renderRt(t) {
   const hN = rtHeroU(B), nec = hN && hN.hero === 'necro', uzF = nec ? rtUzFree(B) : 0, aimR = nec && typeof RTU !== 'undefined' && RTU.aim === 'raise';
   if (typeof bstDecals === 'function') bstDecals(B, z, t);
   rtGravDraw(B, z, t);      /* тяжесть: круг, придавленный к земле */
+  if (typeof pthZoneDraw === 'function') pthZoneDraw(B, z, t);      /* круги пути мага: холодное пламя, застывший миг, замедление */
   for (const c of B.corp) { if (c.px == null) continue; if (typeof bstCorpse === 'function' && bstCorpse(c)) continue; const X = rX(c.px), Y = rY(c.py), D = TSD.dead, bodyU = c.id != null && btU(B, c.id); if (bodyU && bodyU.hp <= 0 && bodyU.hasCorp) { } else if (typeof undCorpseDraw === 'function' && undCorpseDraw(c, X, Y, z, t)) { } else if (TS.ready && D) tsBlit(tsCanvas('dead'), D, D.n - 1, X, Y, TSS * z * 1.3, false, 4); else { ctx.fillStyle = '#d9d2c0'; ci(ctx, X, Y, 5 * z); }
     if (nec) { const uz = uzOf(c.k), fit = uz <= uzF, pul = aimR ? 1 + Math.sin(t * 6) * 0.15 : 1; ctx.strokeStyle = fit ? 'rgba(120,255,200,' + (aimR ? 0.95 : 0.55) + ')' : 'rgba(255,140,120,0.6)'; ctx.lineWidth = aimR ? 2.5 : 1.5; ctx.beginPath(); ctx.arc(X, Y - 4 * z, 14 * z * pul, 0, 6.3); ctx.stroke();
       if (uz > 1 || aimR || !fit) { const bx = X + 12 * z, by = Y - 16 * z; ctx.fillStyle = fit ? 'rgba(20,90,60,0.9)' : 'rgba(120,40,30,0.9)'; ci(ctx, bx, by, 7.5); ctx.fillStyle = '#fff'; ctx.font = '800 10px system-ui,Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(uz), bx, by + 0.5); ctx.textBaseline = 'alphabetic'; } } }
@@ -8792,9 +8900,10 @@ function renderRt(t) {
   // бойцы и деревья — по глубине
   const list = []; for (const ob of R.ob) list.push({ y: ob.y, ob: ob }); for (const u of B.u) { if (u.out && !u.flee) continue; if (u.px == null) continue; if (u.reform != null) continue; list.push({ y: u.py, u: u }); }
   if (ELs && ELs.cnt) elRows(ELs, list);      /* пламя — по строкам клеток, в общем порядке глубины */
-  list.sort((a, b) => a.y - b.y); for (const it of list) { if (it.ob) rtDrawOb(B, it.ob, t); else if (it.el != null) elRowDraw(ELs, it.el, t); else { rtDrawUnit(B, it.u, t); if (it.u.sch === 'grav' && it.u.hp > 0 && !(typeof h3Grav === 'function' && h3Grav(it.u))) rtGravOrbit(it.u, t); } }      /* камешки рисуем, только пока нет своей фигуры */
+  list.sort((a, b) => a.y - b.y); for (const it of list) { if (it.ob) rtDrawOb(B, it.ob, t); else if (it.el != null) elRowDraw(ELs, it.el, t); else { const pf = typeof pthUF === 'function' ? pthUF(it.u) : ''; if (pf) { ctx.save(); ctx.filter = pf; } rtDrawUnit(B, it.u, t); if (pf) ctx.restore(); if (it.u.mpath && it.u.hero && it.u.hp > 0 && !it.u.out && it.u.sch !== 'grav' && typeof pthSign === 'function') pthSign(it.u, rX(it.u.px), rY(it.u.py), z * 1.6, t, B.night);      /* 1.6·z — мерка фигуры героя в бою (TSS·z·1,7·1,15) */      /* старость и стоящие во времени — своим фильтром; знак пути на фигуре мага */ if (it.u.sch === 'grav' && it.u.hp > 0 && !(typeof h3Grav === 'function' && h3Grav(it.u))) rtGravOrbit(it.u, t); } }      /* камешки рисуем, только пока нет своей фигуры */
   if (typeof bstFrameTick === 'function') { bstFrameTick(B); bstEvents(B, z); bstPartDraw(z); }
   rtHoleDraw(B, z, t);      /* чёрная дыра — поверх бойцов: их затягивает в воронку */
+  if (typeof pthTopDraw === 'function') pthTopDraw(B, z, t);      /* купол застывшего мига, нити созвездия, старость, ускорение */
   for (const p of R.pr) rtDrawPr(B, p, t);
   for (const f of R.fx || []) rtDrawFx(B, f, t);
   // дымка у кромки (Kimi 039, п. 6): у верхней и боковых кромок ползёт низкая дымка (виньетка — в подложке поля);
@@ -8833,6 +8942,7 @@ function rtNight(B, t, z) {
     for (const u of B.u) if (u.hp > 0 && u.burnT > R.t && u.px != null) { const r = 46 * z; ctx.drawImage(glowSpr, rX(u.px) - r, rY(u.py) - 20 * z - r, r * 2, r * 2); }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
   if (typeof elNightGlow === 'function') elNightGlow();      /* живой огонь ночью светится сам: завеса тьмы его не глушит */
+  if (typeof elColdGlow === 'function') elColdGlow();      /* и холодное пламя — синим */
 }
 function rtGravDraw(B, z, t) {                                                     // тяжесть: лиловый круг у земли, воздух над ним струится вниз
   const R = B.rt; for (const zn of R.zn) { if (zn.k !== 'heavy') continue; const X = rX(zn.cx), Y = rY(zn.cy), r = zn.r * z, left = zn.t1 - R.t, al = Math.min(1, left / 0.6, (R.t - zn.t0) / 0.3), X9 = skx(zn.sk);
@@ -10833,6 +10943,117 @@ function h3Blit(L, X, Y, sc, al) {
   ctx.drawImage(L.img, sx, sy, w, h, (ox - L.ax0) * sc, (oy - L.by0) * sc, w * sc, h * sc); ctx.restore();
 }
 
+/* ===================== Стихии, М6: путь мага — отрисовка (расчёт — 1z_path.js) =====================
+   Холодное пламя — по клеткам сетки стихий, сине-лиловыми языками; круги Застывшего мига и Замедления; столп солнца и лунный луч;
+   нити Созвездия; старость (выцветший, с осыпающимся песком), ускорение (золотые полосы), стоящие во времени враги;
+   знак пути на фигуре мага: у Космоса над посохом кружат звёзды, у Времени вокруг мага идут золотые кольца-циферблаты. */
+const PTH_CF = ['#120c38', '#1b1356', '#251a74', '#2f2392', '#3a2eb0', '#4638c8', '#5546dc', '#6656ea', '#7a6cf4', '#8f86fa', '#a8a4ff', '#c2c6ff', '#d8e4ff', '#eef6ff'];
+const PTH_CB = PTH_CF.map(() => []);
+const PTH_G = '#e8c060', PTH_GL = '#fff1c2', PTH_V = '#9a8cff', PTH_S = '#e8e4ff';
+function elColdDraw(E, t) {                                                        // холодное пламя на земле: сквозь синюю дымку видна трава, над ней — фиолетовые языки с бледными кончиками
+  if (!E || !E.coldOn) return; const w = E.w, C = E.cold, ft = Math.floor(t * 12), P = PTH_CB; let used = 0, usedB = 0; const BS = PTH_CB.base || (PTH_CB.base = PTH_CF.map(() => []));
+  const put = (c, x, y, ww, hh) => { const L = P[c]; if (!L.length) used |= 1 << c; L.push(x, y, ww, hh); };
+  for (let i = 0; i < E.n; i++) { const c = C[i]; if (!c) continue; const x = i % w, y = (i / w) | 0, X0 = Math.round(rX(x * ELC)), Y0 = Math.round(rY(y * ELC)), cw = Math.round(rX((x + 1) * ELC)) - X0, ch = Math.round(rY((y + 1) * ELC)) - Y0;
+    const nz = (((i * 73) ^ (ft * 151)) + (i + ft) * 29 >>> 0) % 7, fi = Math.max(1, Math.min(14, c + (nz % 3) - 1)), b = Math.max(0, Math.min(8, fi - 6));
+    { const L = BS[b]; if (!L.length) usedB |= 1 << b; L.push(X0, Y0, cw, ch); }
+    if (fi >= 7 && nz !== 3 && nz !== 6) put(Math.min(11, fi - 3), X0 + Math.round(cw * (0.18 + (nz & 1) * 0.14)), Y0 - ch, Math.ceil(cw * 0.6), ch);
+    if (fi >= 10 && (nz & 1)) put(Math.min(12, fi - 2), X0 + Math.round(cw * 0.32), Y0 - ch * 2, Math.ceil(cw * 0.38), ch);
+    if (fi >= 13 && nz >= 5) put(13, X0 + Math.round(cw * 0.42), Y0 - ch * 3, Math.ceil(cw * 0.24), ch); }
+  ctx.globalAlpha = 0.42; for (let c = 0; c < 9; c++) { if (!(usedB & (1 << c))) continue; const L = BS[c]; ctx.fillStyle = PTH_CF[c + 2]; ctx.beginPath(); for (let k = 0; k < L.length; k += 4) ctx.rect(L[k], L[k + 1], L[k + 2], L[k + 3]); ctx.fill(); L.length = 0; }
+  ctx.globalAlpha = 0.95; for (let c = 0; c < PTH_CF.length; c++) { if (!(used & (1 << c))) continue; const L = P[c]; ctx.fillStyle = PTH_CF[c]; ctx.beginPath(); for (let k = 0; k < L.length; k += 4) ctx.rect(L[k], L[k + 1], L[k + 2], L[k + 3]); ctx.fill(); L.length = 0; } ctx.globalAlpha = 1;
+  if (!(typeof CINE !== 'undefined' && CINE.ghost) && typeof bstEmit === 'function' && Math.random() < 0.3) { for (let g = 0; g < 6; g++) { const i = (Math.random() * E.n) | 0; if (C[i] > 6) { bstEmit({ k: 'smoke', x: (i % w + 0.5) * ELC, y: (((i / w) | 0) + 0.5) * ELC, h: 8, vx: 0, vy: 0, vh: 30 + Math.random() * 30, a: 0, life: 0.6 + Math.random() * 0.4, r0: 1.4, r1: 0.4, col: '#c8d4ff', al: 0.9 }); break; } } }      /* искры холодного пламени уходят вверх */
+}
+function elColdGlow() {                                                            // ночью холодное пламя светит само — синим
+  const E = EL; if (!E || !E.coldOn || !G || E.B !== G.battle) return; const w = E.w, C = E.cold; ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgb(22,18,64)';
+  for (let i = 0; i < E.n; i++) { if (C[i] < 4) continue; const x = i % w, y = (i / w) | 0, X0 = Math.round(rX(x * ELC)), Y0 = Math.round(rY(y * ELC)); ctx.fillRect(X0, Y0 - Math.round(rY(ELC) - rY(0)), Math.round(rX((x + 1) * ELC)) - X0, Math.round(rY((y + 2) * ELC)) - Y0); }
+  ctx.globalCompositeOperation = 'source-over';
+}
+function pthStar(X, Y, s, col, al) { ctx.globalAlpha = al; ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(X, Y - s * 2.2); ctx.lineTo(X + s * 0.5, Y - s * 0.5); ctx.lineTo(X + s * 2.2, Y); ctx.lineTo(X + s * 0.5, Y + s * 0.5); ctx.lineTo(X, Y + s * 2.2); ctx.lineTo(X - s * 0.5, Y + s * 0.5); ctx.lineTo(X - s * 2.2, Y); ctx.lineTo(X - s * 0.5, Y - s * 0.5); ctx.closePath(); ctx.fill(); }      // четырёхлучевая звёздочка
+function pthClock(X, Y, r, z, t, al, run) {                                        // циферблат у земли: кольцо, двенадцать меток, две стрелки (тёмная подводка — чтобы читался и на светлой траве)
+  const h1 = run ? t * 0.5 : 1.1, h2 = run ? t * 3 : 4.4, lw = Math.max(1.6, 2.4 * z);
+  const draw = (col, w, a) => { ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.stroke(); ctx.beginPath(); ctx.ellipse(X, Y, r * 0.86, r * 0.86 * 0.62, 0, 0, 6.3); ctx.stroke();
+    for (let i = 0; i < 12; i++) { const an = i / 12 * 6.283, c = Math.cos(an), s = Math.sin(an), L = i % 3 === 0 ? 0.7 : 0.8; ctx.beginPath(); ctx.moveTo(X + c * r * L, Y + s * r * L * 0.62); ctx.lineTo(X + c * r * 0.86, Y + s * r * 0.86 * 0.62); ctx.stroke(); }
+    ctx.lineWidth = w * 1.3; ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X + Math.cos(h1) * r * 0.42, Y + Math.sin(h1) * r * 0.42 * 0.62); ctx.stroke(); ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X + Math.cos(h2) * r * 0.66, Y + Math.sin(h2) * r * 0.66 * 0.62); ctx.stroke(); };
+  ctx.save(); ctx.lineCap = 'round'; draw('rgba(40,26,6,0.6)', lw + 2, al * 0.7); draw('#ffd36a', lw, al); ctx.restore();
+}
+function pthZoneDraw(B, z, t) {                                                     // у земли, под бойцами: круги Времени, кайма холодного пламени
+  const R = B.rt; for (const zn of R.zn) { if (!zn.sp || zn.dead) continue; const X = rX(zn.cx), Y = rY(zn.cy), r = zn.r * z, left = Math.max(0, Math.min(1, (zn.t1 - R.t) / 0.6)), born = Math.min(1, (R.t - zn.t0) / 0.35), al = Math.min(left, born);
+    if (zn.k === 'cfire') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.22 * al; ctx.fillStyle = '#4a3cc8'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.8, 0, 0, 6.3); ctx.fill(); ctx.restore(); }
+    else if (zn.k === 'tsl') { ctx.save(); ctx.globalAlpha = 0.16 * al; ctx.fillStyle = '#c89a40'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.setLineDash([8 * z, 10 * z]); ctx.lineDashOffset = -t * 4 * z; ctx.globalAlpha = 0.7 * al; ctx.strokeStyle = PTH_G; ctx.lineWidth = Math.max(1.5, 2 * z); ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.stroke(); ctx.restore();
+      pthClock(X, Y, r * 0.42, z, t * 0.15, 0.55 * al, 1); }
+    else if (zn.k === 'tst') { ctx.save(); ctx.globalAlpha = 0.18 * al; ctx.fillStyle = '#b8d0ff'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.fill(); ctx.restore(); pthClock(X, Y, r * 0.96, z, t, 0.85 * al, 0); }
+  }
+}
+function pthTopDraw(B, z, t) {                                                      // поверх бойцов: купол Застывшего мига, нити Созвездия, старость, ускорение
+  const R = B.rt;
+  for (const zn of R.zn) { if (zn.k !== 'tst' || zn.dead) continue; const X = rX(zn.cx), Y = rY(zn.cy), r = zn.r * z, left = Math.max(0, Math.min(1, (zn.t1 - R.t) / 0.6));
+    ctx.save(); ctx.globalAlpha = 0.06 * left; ctx.fillStyle = '#dce8ff'; ctx.beginPath(); ctx.ellipse(X, Y - r * 0.12, r, r * 0.78, 0, Math.PI, 0); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, Math.PI); ctx.fill();
+    ctx.globalAlpha = 0.45 * left; ctx.strokeStyle = '#eef4ff'; ctx.lineWidth = Math.max(1, 1.5 * z); ctx.beginPath(); ctx.ellipse(X, Y - r * 0.12, r, r * 0.78, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    for (let i = 0; i < 18; i++) { const h = ((i * 2654435761) >>> 8 & 1023) / 1023, h2 = ((i * 2246822519) >>> 8 & 1023) / 1023, an = h * 6.283, d = Math.sqrt(h2) * 0.9; ctx.globalAlpha = 0.7 * left; ctx.fillStyle = i % 3 ? '#fff4d0' : '#d8e6ff'; ctx.fillRect(X + Math.cos(an) * r * d, Y + Math.sin(an) * r * d * 0.62 - (10 + h * 40) * z, Math.max(1, 2 * z), Math.max(1, 2 * z)); }      /* пылинки повисли в воздухе */
+    ctx.restore(); }
+  const grp = {}; for (const u of B.u) if (u.s && u.s.cst && u.cstG && u.hp > 0 && !u.out && u.px != null) (grp[u.cstG] = grp[u.cstG] || []).push(u);
+  for (const g in grp) { const L = grp[g]; if (L.length < 2) continue; const left = Math.min(1, Math.min(...L.map(u => u.s.cst)) / 0.8); ctx.save(); ctx.lineCap = 'round';
+    for (let pass = 0; pass < 2; pass++) { ctx.globalAlpha = (pass ? 0.9 : 0.28) * left; ctx.strokeStyle = pass ? PTH_S : PTH_V; ctx.lineWidth = (pass ? 1.4 : 5) * Math.max(0.8, z); ctx.beginPath(); for (let i = 0; i < L.length; i++) { const u = L[i], x = rX(u.px), y = rY(u.py) - 22 * z; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.stroke(); }
+    for (const u of L) pthStar(rX(u.px), rY(u.py) - 22 * z, (2.2 + Math.sin(t * 5 + u.id) * 0.5) * z, PTH_S, 0.95 * left);
+    ctx.restore(); }
+  for (const u of B.u) { if (u.hp <= 0 || u.out || u.px == null || !u.s) continue; const X = rX(u.px), Y = rY(u.py);
+    if (u.s.aged) { ctx.save(); for (let i = 0; i < 5; i++) { const q = ((t * 0.9 + i / 5) % 1), x = X + (((i * 37 + u.id * 11) % 17) - 8) * z, y = Y - (34 - q * 30) * z; ctx.globalAlpha = 0.8 * (1 - q); ctx.fillStyle = i % 2 ? '#c9b48a' : '#a89a80'; ctx.fillRect(x, y, Math.max(1, 1.8 * z), Math.max(1, 1.8 * z)); } ctx.restore(); }      /* песок осыпается */
+    if (u.s.thaste) { const d = u.face === -1 ? 1 : -1, mv = Math.hypot(u.vx || 0, u.vy || 0) > 4, al = Math.min(1, u.s.thaste / 0.6) * (mv ? 0.85 : 0.45); ctx.save(); ctx.globalAlpha = al; ctx.strokeStyle = PTH_G; ctx.lineWidth = Math.max(1, 1.6 * z); ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) { const y = Y - (10 + i * 9) * z, x0 = X + d * (8 + (i % 2) * 4) * z, L = (10 + ((t * 40 + i * 13) % 8)) * z; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + d * L, y); ctx.stroke(); } ctx.restore(); }      /* золотые полосы за спиной */
+    if (u.tsT != null && R.t - u.tsT < 0.2 && u.s.frz) { ctx.save(); ctx.globalAlpha = 0.9; ctx.strokeStyle = PTH_GL; ctx.lineWidth = Math.max(1, 1.4 * z); const hx = X, hy = Y - 50 * z, s = 4 * z; ctx.beginPath(); ctx.moveTo(hx - s, hy - s * 1.3); ctx.lineTo(hx + s, hy - s * 1.3); ctx.lineTo(hx - s, hy + s * 1.3); ctx.lineTo(hx + s, hy + s * 1.3); ctx.closePath(); ctx.stroke(); ctx.restore(); }      /* песочные часы над стоящим во времени */
+  }
+}
+function pthUF(u) { if (!u.s) return ''; if (u.tsT != null && u.s.frz && G.battle && G.battle.rt.t - u.tsT < 0.2) return 'sepia(0.7) saturate(0.7) brightness(1.08)'; if (u.s.aged) return 'grayscale(' + (0.45 + 0.35 * (u.agK || 1)) + ') brightness(0.9) contrast(0.9)'; return ''; }      // фильтр фигуры: стоящий во времени — сепия, состарившийся — выцветший
+function pthSign(u, X, Y, z, t, night) {                                            // знак пути на фигуре мага
+  const P = u.mpath; if (!P) return; const f = u.face === -1 ? -1 : 1;
+  if (P === 'cos') { const sx = X + f * 2 * z, sy = Y - 50 * z, n = night ? 5 : 4; ctx.save();
+    if (night) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.26; ctx.fillStyle = '#6a58ff'; ctx.beginPath(); ctx.ellipse(sx, sy, 13 * z, 6 * z, 0, 0, 6.3); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }      /* звёздный венец над головой; ночью — с сиянием */
+    for (let i = 0; i < n; i++) { const an = t * 1.6 + i / n * 6.283, x = sx + Math.cos(an) * 12 * z, y = sy + Math.sin(an) * 5 * z; pthStar(x, y, (night ? 2.2 : 1.9) * z * (0.8 + 0.3 * Math.sin(t * 6 + i)), i % 2 ? PTH_S : '#ffe9a6', Math.sin(an) > -0.2 ? 1 : 0.6); }
+    for (let i = 0; i < 3; i++) { const q = (t * 0.7 + i / 3) % 1, x = X + (((i * 29) % 13) - 6) * z, y = Y - (8 + i * 9) * z; pthStar(x, y, 0.9 * z, PTH_S, 0.8 * Math.sin(q * Math.PI)); }      /* звёздная пыль на мантии */
+    ctx.restore(); return; }
+  ctx.save(); ctx.strokeStyle = PTH_G; ctx.lineWidth = Math.max(1.2, 1.6 * z);
+  for (let k = 0; k < 2; k++) { const cy = Y - (16 + k * 14) * z, rx = (16 - k * 3) * z, ry = 4.5 * z, rot = t * (k ? -0.6 : 0.45); ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.ellipse(X, cy, rx, ry, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.ellipse(X, cy, rx, ry, 0, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke();
+    for (let i = 0; i < 6; i++) { const an = rot + i / 6 * 6.283, c = Math.cos(an), s = Math.sin(an); ctx.globalAlpha = s > 0 ? 0.9 : 0.35; ctx.fillStyle = PTH_GL; ctx.fillRect(X + c * rx - 0.8 * z, cy + s * ry - 0.8 * z, Math.max(1, 1.7 * z), Math.max(1, 1.7 * z)); } }      /* кольца-циферблаты: метки бегут по кругу */
+  ctx.restore();
+}
+function pthFxDraw(B, f, t, a, X, Y, z) {                                          // вспышки чар пути; true — нарисовано здесь
+  const k = f.k;
+  if (k === 'sunbeam') { const r = f.r * z, moon = !!f.moon, top = Math.min(rY(0), 0) - 20, al = a < 0.15 ? a / 0.15 : 1 - (a - 0.15) / 0.85, wB = r * (0.55 - a * 0.2);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.35 * al; ctx.fillStyle = moon ? '#7f9cff' : '#ffb84a'; ctx.fillRect(X - wB, top, wB * 2, Y - top);
+    ctx.globalAlpha = 0.6 * al; ctx.fillStyle = moon ? '#c8d8ff' : '#ffe08a'; ctx.fillRect(X - wB * 0.55, top, wB * 1.1, Y - top);
+    ctx.globalAlpha = 0.95 * al; ctx.fillStyle = '#ffffff'; ctx.fillRect(X - wB * 0.2, top, wB * 0.4, Y - top);
+    ctx.globalAlpha = 0.55 * al; ctx.fillStyle = moon ? '#a8bcff' : '#ffd070'; ctx.beginPath(); ctx.ellipse(X, Y, r * (0.8 + a * 0.4), r * 0.5 * (0.8 + a * 0.4), 0, 0, 6.3); ctx.fill();
+    ctx.restore(); if (!moon) for (let i = 0; i < 10; i++) { const an = i / 10 * 6.283 + a, d = r * (0.4 + a * 0.9); pthStar(X + Math.cos(an) * d, Y + Math.sin(an) * d * 0.5 - a * 20 * z, 1.6 * z, '#fff2b0', Math.max(0, 1 - a)); }
+    else for (let i = 0; i < 8; i++) { const an = i / 8 * 6.283 - a, d = r * (0.3 + a); pthStar(X + Math.cos(an) * d, Y + Math.sin(an) * d * 0.5, 1.4 * z, '#e4ecff', Math.max(0, 1 - a)); }
+    return true; }
+  if (k === 'boom' && f.cold) { const r = (f.r || 100) * z * (0.35 + a * 0.75); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6 * (1 - a); ctx.fillStyle = '#5a48e0'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.fill();
+    ctx.globalAlpha = 0.9 * (1 - a); ctx.strokeStyle = PTH_S; ctx.lineWidth = (6 * (1 - a) + 1) * z; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.stroke(); ctx.restore();
+    for (let i = 0; i < 12; i++) { const an = i / 12 * 6.283, d = r * (0.6 + (i % 3) * 0.2); pthStar(X + Math.cos(an) * d, Y + Math.sin(an) * d * 0.62 - a * 30 * z, 2 * z, i % 2 ? PTH_S : '#b8b0ff', Math.max(0, 1 - a)); }
+    return true; }
+  if (k === 'cfireOn' || k === 'tslowOn' || k === 'hasteOn' || k === 'tstop') { const r = (f.r || 100) * z * (k === 'tstop' ? Math.min(1, 0.4 + a * 4) : 0.3 + a * 0.8), col = k === 'cfireOn' ? PTH_V : k === 'tstop' ? '#eef4ff' : PTH_G, al = k === 'tstop' ? Math.max(0, 1 - a * 6) : 1 - a;
+    if (al <= 0) return true; ctx.save(); ctx.globalAlpha = 0.85 * al; ctx.strokeStyle = col; ctx.lineWidth = (5 * al + 1) * z; ctx.beginPath(); ctx.ellipse(X, Y, r, r * (k === 'cfireOn' ? 0.8 : 0.62), 0, 0, 6.3); ctx.stroke();
+    if (k === 'tstop') { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 * al; ctx.fillStyle = '#c8dcff'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.fill(); }
+    ctx.restore(); if (k === 'cfireOn') for (let i = 0; i < 8; i++) { const an = i / 8 * 6.283 + a * 2, d = r * 0.9; pthStar(X + Math.cos(an) * d, Y + Math.sin(an) * d * 0.8 - a * 16 * z, 1.6 * z, PTH_S, 1 - a); }
+    return true; }
+  if (k === 'cstOn' && f.ids) { const al = 1 - a, us = f.ids.map(id => btU(B, id)).filter(u => u && u.px != null); ctx.save(); ctx.strokeStyle = PTH_S; ctx.lineCap = 'round';
+    for (const u of us) { const x = rX(u.px), y = rY(u.py) - 22 * z, q = Math.min(1, a * 3); ctx.globalAlpha = 0.9 * al; ctx.lineWidth = 2 * z; ctx.beginPath(); ctx.moveTo(X, Y - 30 * z); ctx.lineTo(X + (x - X) * q, Y - 30 * z + (y - Y + 30 * z) * q); ctx.stroke(); pthStar(x, y, 3.5 * z * (1 - a * 0.5), PTH_S, al); }
+    pthStar(X, Y - 30 * z, 4 * z, '#ffe9a6', al); ctx.restore(); return true; }
+  if (k === 'cstHit') { const t0 = btU(B, f.id); if (!t0 || t0.px == null) return true; const us = B.u.filter(u => u.cstG === f.g && u.s && u.s.cst && u.hp > 0 && !u.out && u.px != null && u !== t0); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fffaf0'; ctx.lineWidth = 3 * z * (1 - a); ctx.globalAlpha = 1 - a;
+    for (const u of us) { ctx.beginPath(); ctx.moveTo(rX(t0.px), rY(t0.py) - 22 * z); ctx.lineTo(rX(u.px), rY(u.py) - 22 * z); ctx.stroke(); } ctx.restore(); return true; }
+  if (k === 'ageOn') { ctx.save(); for (let i = 0; i < 14; i++) { const an = i / 14 * 6.283 + a * 5, d = (26 - a * 14) * z; ctx.globalAlpha = 1 - a; ctx.fillStyle = i % 2 ? '#d8c69a' : '#b0a080'; ctx.fillRect(X + Math.cos(an) * d, Y - 22 * z + Math.sin(an) * d * 0.5 + a * 14 * z, Math.max(1, 2 * z), Math.max(1, 2 * z)); }
+    const hy = Y - (48 + a * 18) * z, s = 5 * z; ctx.globalAlpha = 1 - a; ctx.strokeStyle = PTH_G; ctx.lineWidth = Math.max(1, 1.6 * z); ctx.beginPath(); ctx.moveTo(X - s, hy - s * 1.3); ctx.lineTo(X + s, hy - s * 1.3); ctx.lineTo(X - s, hy + s * 1.3); ctx.lineTo(X + s, hy + s * 1.3); ctx.closePath(); ctx.stroke(); ctx.restore(); return true; }
+  return false;
+}
+function pthTeleDraw(B, T0, t) {                                                    // место солнечного удара: на земле разгорается круг, с неба тянется тонкий луч
+  const R = B.rt, z = RTV.z, X = rX(T0.x), Y = rY(T0.y), q = Math.min(1, (R.t - T0.t0) / Math.max(0.1, T0.t1 - T0.t0)), r = T0.r * z, moon = !!T0.moon;
+  ctx.save(); ctx.globalAlpha = 0.25 + 0.45 * q; ctx.strokeStyle = moon ? '#c8d8ff' : '#ffd070'; ctx.lineWidth = Math.max(1.5, 2.5 * z); ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.62, 0, 0, 6.3); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.18 * q; ctx.fillStyle = moon ? '#7f9cff' : '#ffb84a'; ctx.beginPath(); ctx.ellipse(X, Y, r * q, r * 0.62 * q, 0, 0, 6.3); ctx.fill();
+  ctx.globalAlpha = 0.25 * q; ctx.fillRect(X - 3 * z, Math.min(rY(0), 0), 6 * z, Y - Math.min(rY(0), 0)); ctx.restore();
+}
+{ const tsPerson0 = tsPerson; tsPerson = function (p, X, Y, z, t, tool) { const r = tsPerson0(p, X, Y, z, t, tool); if (r && p.hero === 'mage' && p.sch !== 'grav' && typeof mpathOf === 'function' && mpathOf(p)) pthSign({ mpath: mpathOf(p), face: p.face }, X, Y, z * 0.8, t, typeof isNight === 'function' && isNight()); return r; }; }      /* знак пути и на улицах города */
+
 function withTimeout(p, ms) { return new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('timeout')), ms); Promise.resolve(p).then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); }); }); }
 function langFrom(code) { code = String(code || '').slice(0, 2).toLowerCase(); return ['ru', 'be', 'kk', 'uk', 'uz'].indexOf(code) >= 0 ? 'ru' : 'en'; }
 function isAuth() { try { return !!player && player.getMode && player.getMode() !== 'lite'; } catch (e) { return false; } }
@@ -11869,6 +12090,7 @@ function openHero() {
     md.appendChild(el2('div', 'lbl', esc(T('hpP')) + ' · ' + Math.max(0, Math.round(h.hp)) + '/' + mx)); md.appendChild(el2('div', 'pbar hp', '<b style="width:' + clamp(h.hp / mx * 100, 0, 100) + '%"></b>'));
     if (h.hero === 'mage' || h.hero === 'necro') { const mpM = typeof heroMpMax === 'function' ? heroMpMax(h) : 100; md.appendChild(el2('div', 'lbl', esc(T('mpT')) + ' · ' + Math.round(h.mp) + '/' + mpM)); md.appendChild(el2('div', 'pbar mana', '<b style="width:' + clamp(h.mp / mpM * 100, 0, 100) + '%"></b>')); }
     if (typeof heroBox === 'function') heroBox(md, h);
+    if (typeof mpathBox === 'function') mpathBox(md, h);      /* путь мага (М6) */
     if (h.wound) md.appendChild(el2('p', 'warn', esc(T('woundP'))));
     md.appendChild(el2('p', '', esc(T('heroKills', { n: h.kills }))));
     if (!away && G.land && G.land.a.some(A => A.st >= 1)) { const sb = btn('btn', esc(T('heroSend')), () => { HERO_SEND = h.id; closeModal(); if (view !== 'land') toggleLand(); toast(T('heroSendP')); }); sb.dataset.k = 'heroSend'; md.appendChild(sb); }
@@ -14027,11 +14249,11 @@ function gestIcon(kind) {
   g.stroke(); return c;
 }
 const RT_GLYPH = { slash: 'line', whirl: 'circle', rally: 'vee', stand: 'hold', bolt: 'line', ward: 'circle', chain: 'zigzag', ice: 'vee', fog: 'spiral', eye: 'hold', raise: 'line', drain: 'line', order: 'line', call: 'circle', group: 'line', tide: 'hold', recall: 'circle', shadow: 'line', wrath: 'spiral', unshak: 'zigzag', meteor: 'hold', tstop: 'circle', dusta: 'circle', harvest: 'circle', realm: 'spiral' };
-const RT_ORDER = { grav: ['pull', 'push', 'weight', 'rockfall', 'float', 'hole', 'meteor'], war: ['slash', 'whirl', 'rally', 'stand', 'wrath', 'unshak'], mage: ['bolt', 'ward', 'chain', 'ice', 'fog', 'eye', 'meteor', 'tstop'], necro: ['raise', 'raiseAll', 'order', 'hold', 'drain', 'call', 'recall', 'shadow', 'mend', 'dusta', 'harvest', 'realm'] };
-const RT_INST = { whirl: 1, rally: 1, call: 1, unshak: 1, tstop: 1, dusta: 1, harvest: 1, realm: 1, raiseAll: 1 };      // приёмы без цели: сразу по нажатию
-const RT_PT = { pull: 1, push: 1, weight: 1, rockfall: 1, float: 1, hole: 1 };      // приёмы в точку: нажать кнопку, потом коснуться поля
+const RT_ORDER = { grav: ['pull', 'push', 'weight', 'rockfall', 'float', 'hole', 'meteor'], war: ['slash', 'whirl', 'rally', 'stand', 'wrath', 'unshak'], mage: ['bolt', 'ward', 'chain', 'ice', 'fog', 'eye', 'mpath', 'meteor', 'sun', 'cfire', 'cstl', 'tstop', 'tslow', 'age', 'haste'], necro: ['raise', 'raiseAll', 'order', 'hold', 'drain', 'call', 'recall', 'shadow', 'mend', 'dusta', 'harvest', 'realm'] };
+const RT_INST = { whirl: 1, rally: 1, call: 1, unshak: 1, haste: 1, dusta: 1, harvest: 1, realm: 1, raiseAll: 1 };      // приёмы без цели: сразу по нажатию
+const RT_PT = { pull: 1, push: 1, weight: 1, rockfall: 1, float: 1, hole: 1, sun: 1, cfire: 1, cstl: 1, tstop: 1, tslow: 1, age: 1 };      // приёмы в точку: нажать кнопку, потом коснуться поля
 const RT_TOG = { hold: 1, mend: 1 };                                                                                       // переключатели: приказ свите, починка
-function rtShown(B, h, ab) { if (RT_TOG[ab]) return h.hero === 'necro' && (ab === 'hold' || (h.lv || 1) >= 2 || !!B.demi); const D = RTAB[rtCls(h)][ab]; if (!D) return false; if (D.demi && !h.demi) return false; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return false; return true; }
+function rtShown(B, h, ab) { if (ab === 'mpath') return rtCls(h) === 'mage' && !!h.demi && !h.mpath && h.side === 0; if (RT_TOG[ab]) return h.hero === 'necro' && (ab === 'hold' || (h.lv || 1) >= 2 || !!B.demi); const D = RTAB[rtCls(h)][ab]; if (!D) return false; if (D.path && h.mpath !== D.path) return false; if (D.demi && !h.demi) return false; if (D.relic && !(typeof artOnK === 'function' && artOnK(D.relic, B))) return false; return true; }
 /* значки умений: что умение делает (а не какой жест рисовать) */
 function rtIcon(id, px) {
   const c = document.createElement('canvas'); c.width = c.height = px * 2; const g = c.getContext('2d'); g.scale(px / 12, px / 12); g.translate(12, 12); g.lineCap = 'round'; g.lineJoin = 'round';
@@ -14059,6 +14281,13 @@ function rtIcon(id, px) {
   else if (id === 'fog') { S('#cdd6ea', 2.2); for (let k = 0; k < 3; k++) { const y = -6 + k * 6; g.beginPath(); g.moveTo(-10, y); g.bezierCurveTo(-5, y - 4, -1, y + 4, 3, y); g.bezierCurveTo(6, y - 3, 8, y + 2, 10, y); g.stroke(); } }
   else if (id === 'eye') { F('#2a2f48'); g.beginPath(); g.moveTo(-10, 0); g.quadraticCurveTo(0, -9, 10, 0); g.quadraticCurveTo(0, 9, -10, 0); g.fill(); S('#ffe27a', 1.8); g.stroke(); F('#ffe27a'); C(0, 0, 3.8); g.fill(); F('#1a1a1a'); C(0, 0, 1.6); g.fill(); S('#ff5a4a', 1.4); C(0, 0, 6.5); g.stroke(); }
   else if (id === 'meteor') { S('rgba(255,150,60,.75)', 3); P([[-11, -11], [-2, -2]]); g.stroke(); S('rgba(255,220,140,.6)', 1.8); P([[-11, -5], [-4, 0]]); g.stroke(); F('#6a4a3a'); C(3, 3, 6); g.fill(); F('#ff7a1a'); C(1.5, 1.5, 3); g.fill(); F('#ffe9a0'); C(1, 1, 1.4); g.fill(); }
+  else if (id === 'sun') { g.globalCompositeOperation = 'source-over'; F('rgba(255,200,90,.35)'); g.fillRect(-4.5, -12, 9, 18); F('#ffe9a0'); g.fillRect(-2, -12, 4, 18); F('#ffb347'); g.beginPath(); g.ellipse(0, 7, 9, 3.4, 0, 0, 6.3); g.fill(); F('#fff6d0'); g.beginPath(); g.ellipse(0, 7, 4.5, 1.6, 0, 0, 6.3); g.fill(); S('#ffd070', 1.4); for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283; P([[Math.cos(a) * 6.5, 7 + Math.sin(a) * 2.4], [Math.cos(a) * 10.5, 7 + Math.sin(a) * 3.8]]); g.stroke(); } }      /* М6: столп солнца */
+  else if (id === 'cfire') { flame(-4, 2, 0.8, '#5d4fdc', '#c8c3ff'); flame(4, 3, 0.7, '#7366ec', '#e4e1ff'); flame(0, 0, 1, '#8d84f6', '#ffffff'); F('#e8e4ff'); g.fillRect(-9, -9, 1.6, 1.6); g.fillRect(8, -6, 1.6, 1.6); }      /* холодное пламя */
+  else if (id === 'cstl') { const pts = [[-8, 5], [-3, -4], [3, 1], [8, -7]]; S('rgba(200,195,255,.9)', 1.3); P(pts); g.stroke(); F('#fff'); for (const q of pts) { g.beginPath(); g.moveTo(q[0], q[1] - 3); g.lineTo(q[0] + 0.9, q[1] - 0.9); g.lineTo(q[0] + 3, q[1]); g.lineTo(q[0] + 0.9, q[1] + 0.9); g.lineTo(q[0], q[1] + 3); g.lineTo(q[0] - 0.9, q[1] + 0.9); g.lineTo(q[0] - 3, q[1]); g.lineTo(q[0] - 0.9, q[1] - 0.9); g.closePath(); g.fill(); } }      /* созвездие */
+  else if (id === 'tslow') { S('#e8c060', 1.8); C(0, 0, 9); g.stroke(); S('#fff1c2', 2); P([[0, 0], [0, -6]]); g.stroke(); P([[0, 0], [4.2, 2]]); g.stroke(); S('rgba(232,192,96,.6)', 1.4); g.beginPath(); g.arc(0, 0, 11.5, -2.4, -0.7); g.stroke(); }      /* замедление: часы */
+  else if (id === 'age') { F('#c8a050'); g.fillRect(-7, -10, 14, 2); g.fillRect(-7, 8, 14, 2); S('#d8c69a', 1.6); P([[-5, -8], [5, -8], [0.8, 0], [5, 8], [-5, 8], [-0.8, 0]]); g.closePath(); g.stroke(); F('#a89a80'); P([[-4, 7.2], [4, 7.2], [0, 1.5]]); g.closePath(); g.fill(); F('#d8c69a'); g.fillRect(-0.6, -2, 1.2, 4); }      /* старение: часы, песок внизу */
+  else if (id === 'haste') { S('#e8c060', 2.2); for (let k = 0; k < 3; k++) { P([[-10 + k * 6, -7], [-3 + k * 6, 0], [-10 + k * 6, 7]]); g.stroke(); } }      /* ускорение */
+  else if (id === 'mpath') { F('#9a8cff'); g.beginPath(); g.moveTo(-5, -9); g.lineTo(-3.8, -5.2); g.lineTo(0, -4); g.lineTo(-3.8, -2.8); g.lineTo(-5, 1); g.lineTo(-6.2, -2.8); g.lineTo(-10, -4); g.lineTo(-6.2, -5.2); g.closePath(); g.fill(); S('#e8c060', 1.6); P([[2, -1], [10, -1], [6.8, 4], [10, 9], [2, 9], [5.2, 4]]); g.closePath(); g.stroke(); }      /* выбрать путь: звезда и часы */
   else if (id === 'tstop') { F('#c8a050'); g.fillRect(-7, -10, 14, 2.2); g.fillRect(-7, 7.8, 14, 2.2); S('#e9f0ff', 1.8); P([[-5, -8], [5, -8], [0.8, 0], [5, 8], [-5, 8], [-0.8, 0]]); g.closePath(); g.stroke(); F('#ffe27a'); P([[-3.2, 7], [3.2, 7], [0, 2.5]]); g.closePath(); g.fill(); }
   else if (id === 'raise') { ground(); hand(0, 3, 1); F('rgba(93,255,184,.55)'); C(0, -6, 2); g.fill(); F('rgba(93,255,184,.35)'); C(-5, -3, 1.4); g.fill(); C(5, -4, 1.2); g.fill(); }
   else if (id === 'raiseAll') { ground(); hand(-5.5, 4, 0.7); hand(5.5, 4, 0.7); hand(0, 2, 0.85); F('rgba(93,255,184,.5)'); C(0, -8, 1.6); g.fill(); C(-6, -4, 1.2); g.fill(); C(6, -4, 1.2); g.fill(); }
@@ -14235,7 +14464,7 @@ function rtTutKey(B, h) {                                       // подска�
 }
 function rtDid(k) { if (SV.set && !SV.set['rtDid_' + k]) { SV.set['rtDid_' + k] = 1; saveSoon(); } RTU.key = ''; }
 function rtAvail(B, h, ab) {
-  if (RT_TOG[ab]) return true; if (ab === 'stand' && h.s && h.s.standH) return true; if (!rtCan(B, h, ab)) return false;
+  if (RT_TOG[ab] || ab === 'mpath') return true; if (ab === 'stand' && h.s && h.s.standH) return true; if (!rtCan(B, h, ab)) return false;
   if (ab === 'raise' || ab === 'raiseAll') return B.corp.some(c => c.px != null); if (ab === 'call') return (B.undRes || []).length > 0; if (ab === 'order' || ab === 'recall' || ab === 'shadow') return rtLive(B, 0).some(q => q.und); return true;
 }
 function rtOn(B, h, ab) { const R = B.rt; if (ab === 'hold') return !!R.hold; if (ab === 'mend') return !!B.mend; if (ab === 'stand') return !!(h.s && h.s.standH); return RTU.aim === ab; }
@@ -14246,6 +14475,7 @@ function rtAbPress(B, h, ab, lock) {
   if (ab === 'hold') { R.hold = !R.hold; if (R.hold) for (const q of rtLive(B, 0)) if (q.und) q.cmdT = 0; SND.tap(); toast(R.hold ? T('rtAb').hold[0] : T('rtAb').order[0]); RTU.key = ''; return; }
   if (ab === 'mend') { B.mend = !B.mend; if (typeof heroMendSet === 'function') heroMendSet(B.mend); SND.tap(); toast(T('rtAb').mend[0] + (B.mend ? ' ✓' : ' ✗')); RTU.key = ''; return; }
   if (ab === 'stand') { if (h.s.standH) rtCast(B, 'standOff', {}); else rtSay(rtCast(B, 'stand', {}), 'stand'); rtDid('ab'); RTU.key = ''; return; }
+  if (ab === 'mpath') { SND.tap(); RTU.aim = null; if (typeof mpathOpen === 'function') { B.rt.paused = true; mpathOpen(); } RTU.key = ''; return; }      /* великий маг без пути: выбрать прямо в бою (бой на паузе) */
   if (RT_INST[ab]) { if (rtSay(rtCast(B, ab, {}), ab)) { rtDid('ab'); if (ab === 'raiseAll') rtDid('raise'); } return; }
   if (ab === 'tide') { rtTide(B); return; }
   RTU.aim = RTU.aim === ab ? null : ab; RTU.key = ''; SND.tap();
@@ -15274,14 +15504,14 @@ mergeStr(STR.ru, {
   gravT: 'Школа мага', gravNow: 'Сейчас: {s}', gravS: { mage: 'стихии (огонь, лёд, молния)', grav: 'тяжесть (притянуть, оттолкнуть, обвал, невесомость)' },
   gravGo: 'Переучиться: тяжесть', gravBackB: 'Вернуться: стихии', gravCostT: '{c} кристаллов и {g} золота. Мана в первом бою после учёбы — с нуля.',
   gravWhy: { away: 'Маг в походе', noMage: 'Нужен маг', noObs: 'Обсерватория ещё строится', battle: 'Идёт бой', cost: 'Не хватает кристаллов или золота' },
-  log: { gravTo: '{nm} переучился: теперь маг гравитации', gravBack: '{nm} вернулся к стихиям' }
+  log: { gravTo: '{n} переучился: теперь маг гравитации', gravBack: '{n} вернулся к стихиям' }
 });
 mergeStr(STR.en, {
   b: { observ: ['Observatory', 'A dome for night watching. Here the mage learns weight: to pull and push, drop stones and lift foes into the air.'] },
   gravT: 'Mage school', gravNow: 'Now: {s}', gravS: { mage: 'elements (fire, ice, lightning)', grav: 'gravity (pull, push, rockfall, levitation)' },
   gravGo: 'Retrain: gravity', gravBackB: 'Return: elements', gravCostT: '{c} crystals and {g} gold. Mana starts empty in the first battle after.',
   gravWhy: { away: 'The mage is away', noMage: 'A mage is needed', noObs: 'The observatory is still being built', battle: 'A battle is on', cost: 'Not enough crystals or gold' },
-  log: { gravTo: '{nm} retrained: now a gravity mage', gravBack: '{nm} went back to the elements' }
+  log: { gravTo: '{n} retrained: now a gravity mage', gravBack: '{n} went back to the elements' }
 });
 mergeStr(STR.ru, { ab: { rock: ['Обвал', 'С неба рушатся камни на самую плотную кучу врагов в 330 шагах. Чем выше ступень, тем сильнее. 40 силы'], heavy: ['Тяжесть', 'Все враги в 210 шагах прижаты к земле и не двигаются. 35 силы'] } });
 mergeStr(STR.en, { ab: { rock: ['Rockfall', 'Stones crash from the sky onto the densest pack of enemies within 330 paces. Stronger with each rank. 40 power'], heavy: ['Weight', 'All enemies within 210 paces are pressed to the ground and cannot move. 35 power'] } });
@@ -15289,7 +15519,7 @@ function gravB(md, b) {
   if (b.type !== 'observ' || (b.site && !b.site.to)) return; const h = hero() || (G.land && typeof awayHero === 'function' ? awayHero() : null), g = gravOn(h), c = gravCan();
   md.appendChild(el2('div', 'lbl', esc(T('gravT'))));
   md.appendChild(el2('p', '', esc(T('gravNow', { s: T('gravS')[g ? 'grav' : 'mage'] }))));
-  const bt = btn(c.ok ? 'btn' : 'btn off', esc(T(g ? 'gravBackB' : 'gravGo')), () => { const r = gravSwitch(); if (r === 'ok') { toast(T('log')[gravOn(hero()) ? 'gravTo' : 'gravBack'].replace('{nm}', pName(hero()))); refresh(); saveSoon(); } else toast(T('gravWhy')[r] || r); openB(b.id); }); bt.dataset.k = 'gravSw'; md.appendChild(bt);
+  const bt = btn(c.ok ? 'btn' : 'btn off', esc(T(g ? 'gravBackB' : 'gravGo')), () => { const r = gravSwitch(); if (r === 'ok') { toast(T('log')[gravOn(hero()) ? 'gravTo' : 'gravBack'].replace('{n}', pName(hero()))); refresh(); saveSoon(); } else toast(T('gravWhy')[r] || r); openB(b.id); }); bt.dataset.k = 'gravSw'; md.appendChild(bt);
   md.appendChild(el2('p', c.ok ? 'tip' : 'warn', esc(c.ok ? T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }) : T('gravWhy')[c.why] + ' · ' + T('gravCostT', { c: GRAV_COST.crys, g: GRAV_COST.gold }))));
   if (g && typeof skinShow === 'function' && typeof SK_IDS !== 'undefined' && SK_IDS.some(k => SKINS[k].cls === 'grav' && skFree(k) && skHas(k))) { const o = el2('button', 'opt skobs'); o.dataset.k = 'skObs'; o.innerHTML = '<div class="si">' + svg('star') + '</div><div class="tx"><b>' + esc(T('skObs')) + '</b><span>' + esc(T('skObsP')) + '</span></div>'; o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); skinShow(skWorn('grav') || SK_IDS.find(k => SKINS[k].cls === 'grav' && skFree(k)) || 'star'); }); md.appendChild(o); }      /* маг уже переучен — облики под рукой */
 }
@@ -15297,6 +15527,82 @@ Object.assign(SND, {      /* чёрная дыра: низкий нараста�
   holeOn: () => { tone(38, 4.6, 'sawtooth', 0.07, 0, 110); tone(76, 4.6, 'sine', 0.06, 0.2, 160); swish(260, 0.12, 0, 4.4); },
   holeBoom: () => { swish(140, 0.4, 0, 1.6); tone(48, 1.0, 'sine', 0.42, 0, 24); tone(96, 0.5, 'triangle', 0.18, 0, 40); }
 });
+
+/* ===================== Стихии, М6: путь мага — выбор, карточка героя, строки (расчёт — 1z_path.js, рисунок — 2y_path.js) ===================== */
+mergeStr(STR.ru, {
+  rtAb: { mpath: ['Путь мага', 'Великий маг ещё не выбрал путь: Космос или Время. Нажмите, чтобы выбрать'],
+    meteor: ['Звездопад', 'Нажмите и коснитесь поля — через миг туда падает звезда. На земле остаётся холодное пламя'],
+    sun: ['Солнечный удар', 'Через миг в точку бьёт столп солнца: огромный урон, вокруг всё загорается. Ночью — лунный луч: слабее, зато ослепляет'],
+    cfire: ['Холодное пламя', 'Круг сине-лилового огня на 6 секунд жжёт и сковывает врагов. Вода его не тушит, горит и на снегу'],
+    cstl: ['Созвездие', 'До пяти врагов у точки связаны звёздными нитями: удар по одному — половина удара всем остальным'],
+    tstop: ['Застывший миг', 'В круге на 4 секунды останавливается время: враги, их стрелы и снаряды, даже огонь'],
+    tslow: ['Замедление', 'Круг на 7 секунд: враги, их стрелы и огонь в нём еле движутся'],
+    age: ['Старение', 'До трёх врагов у точки дряхлеют на 12 секунд: слабее бьют, хуже держат удар, медленнее ходят. Великие — вполсилы'],
+    haste: ['Ускорение', 'Весь отряд 6 секунд бегает и бьёт в полтора раза быстрее'] },
+  rtAim: { sun: 'Коснитесь, куда ударить солнцем', cfire: 'Коснитесь, где разжечь холодное пламя', cstl: 'Коснитесь врагов, которых связать', tstop: 'Коснитесь, где остановить время', tslow: 'Коснитесь, где замедлить время', age: 'Коснитесь врага, которого состарить' },
+  rtWhy: { path: 'Это чары другого пути' },
+  rtMsg: { stars: 'Ночь: Сила звёзд — мана копится быстрее, чары сильнее' },
+  log: { mpathCos: '{n} выбирает путь Космоса', mpathTime: '{n} выбирает путь Времени' },
+  mpT: 'Путь мага', mpP: '{n} — на вершине мастерства. Выберите путь: он один и навсегда, сменить его можно только перерождением.',
+  mpN: { cos: 'Космос', time: 'Время' }, mpS: { cos: 'Звёзды, солнце и холодный огонь', time: 'Остановить, замедлить, состарить, ускорить' },
+  mpStars: 'Сила звёзд — сама: ночью мана копится на 60 % быстрее, чары на 20 % сильнее',
+  mpPick: { cos: 'Выбрать путь Космоса навсегда', time: 'Выбрать путь Времени навсегда' }, mpTap: 'Нажмите на путь, чтобы увидеть его чары',
+  mpNow: 'Путь: {p}', mpNeed: 'Путь ещё не выбран — выберите: Космос или Время', mpOpen: 'Выбрать путь мага', mpDone: '{n}: путь {p}', mpSoon: 'На 6-й ступени маг выберет путь: Космос или Время',
+  mpGrav: 'Путь — для мага стихий: у мага тяжести свои чары. Путь сохранится, когда маг вернётся к стихиям.', mpReb: 'Сменить путь можно только перерождением.'
+});
+mergeStr(STR.en, {
+  rtAb: { mpath: ['Mage’s path', 'The great mage has not chosen a path yet: Cosmos or Time. Tap to choose'],
+    meteor: ['Starfall', 'Press, then tap the field — a star falls there a moment later. It leaves cold flame on the ground'],
+    sun: ['Sunstrike', 'A moment later a pillar of sunlight hits the spot: huge damage, everything around catches fire. At night — a moonbeam: weaker, but it blinds'],
+    cfire: ['Cold flame', 'A ring of blue-violet fire for 6 seconds burns and binds foes. Water does not put it out; it burns even on snow'],
+    cstl: ['Constellation', 'Up to five foes near the spot are tied with star threads: a blow to one — half of it to all the others'],
+    tstop: ['Frozen moment', 'Inside the circle time stops for 4 seconds: foes, their arrows and missiles, even fire'],
+    tslow: ['Slow time', 'A circle for 7 seconds: foes, their arrows and fire in it barely move'],
+    age: ['Aging', 'Up to three foes near the spot grow old for 12 seconds: they hit weaker, take blows worse and walk slower. Great ones — by half'],
+    haste: ['Haste', 'For 6 seconds the whole squad runs and strikes one and a half times faster'] },
+  rtAim: { sun: 'Tap where the sun should strike', cfire: 'Tap where to light the cold flame', cstl: 'Tap the foes to tie together', tstop: 'Tap where to stop time', tslow: 'Tap where to slow time', age: 'Tap the foe to age' },
+  rtWhy: { path: 'That spell belongs to the other path' },
+  rtMsg: { stars: 'Night: Star power — mana gathers faster, spells hit harder' },
+  log: { mpathCos: '{n} chooses the path of Cosmos', mpathTime: '{n} chooses the path of Time' },
+  mpT: 'Mage’s path', mpP: '{n} has reached the summit of mastery. Choose a path: there is only one and it is for good — it can be changed only by rebirth.',
+  mpN: { cos: 'Cosmos', time: 'Time' }, mpS: { cos: 'Stars, the sun and cold fire', time: 'Stop, slow, age, hasten' },
+  mpStars: 'Star power — by itself: at night mana gathers 60% faster, spells are 20% stronger',
+  mpPick: { cos: 'Choose the path of Cosmos for good', time: 'Choose the path of Time for good' }, mpTap: 'Tap a path to see its spells',
+  mpNow: 'Path: {p}', mpNeed: 'No path chosen yet — choose: Cosmos or Time', mpOpen: 'Choose the mage’s path', mpDone: '{n}: the path of {p}', mpSoon: 'At step 6 the mage will choose a path: Cosmos or Time',
+  mpGrav: 'The path is for the elemental mage: a gravity mage has his own spells. The path is kept for when he returns to the elements.', mpReb: 'The path can be changed only by rebirth.'
+});
+const MP_SHOW = { cos: ['meteor', 'sun', 'cfire', 'cstl'], time: ['tstop', 'tslow', 'age', 'haste'] };
+function mpathHero() { const h = hero() || (G.land && typeof awayHero === 'function' ? awayHero() : null); return h && h.hero === 'mage' ? h : null; }
+function mpathList(md, k) { const box = el2('div', 'mpl'); for (const ab of MP_SHOW[k]) { const S = T('rtAb')[ab], r = el2('div', 'mpr'); r.appendChild(rtIcon(ab, 15)); r.appendChild(el2('div', '', '<b>' + esc(S[0]) + '</b><span>' + esc(S[1]) + '</span>')); box.appendChild(r); }
+  if (k === 'cos') box.appendChild(el2('div', 'mpr mpx', '<div><b>' + esc(T('mpStars')) + '</b></div>')); md.appendChild(box); }
+function mpathOpen(sel) {                                                         // окно выбора пути: два пути, нажал — видны его чары и кнопка «навсегда»
+  const h = mpathHero(); if (!h || !mpathNeed(h)) return;
+  openModal('mpath', md => {
+    head(md, T('mpT')); md.appendChild(el2('p', '', esc(T('mpP', { n: pName(h) }))));
+    const row = el2('div', 'mpc');
+    for (const k of ['cos', 'time']) { const o = el2('button', 'opt mpo' + (sel === k ? ' on' : '')); o.dataset.k = 'mp_' + k; o.appendChild(rtIcon(k === 'cos' ? 'sun' : 'tstop', 20)); o.appendChild(el2('div', 'tx', '<b>' + esc(T('mpN')[k]) + '</b><span>' + esc(T('mpS')[k]) + '</span>'));
+      o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); mpathOpen(k); }); row.appendChild(o); }
+    md.appendChild(row);
+    if (!sel) { md.appendChild(el2('p', 'tip', esc(T('mpTap')))); return; }
+    mpathList(md, sel);
+    const b = btn('btn mpgo', esc(T('mpPick')[sel]), () => { const r = mpathPick(h, sel); if (r !== 'ok') { toast(r); return; } SND.dawn && SND.dawn(); toast(T('mpDone', { n: pName(h), p: T('mpN')[sel] }));
+      const B = G.battle; if (B && B.rt) { const u = B.u.find(q => q.side === 0 && q.hero === 'mage'); if (u) u.mpath = sel; if (typeof RTU !== 'undefined') RTU.key = ''; }
+      closeModal(); refresh(); saveSoon(); }); b.dataset.k = 'mpGo'; md.appendChild(b);
+    md.appendChild(el2('p', 'tip', esc(T('mpReb'))));
+  }, true);
+}
+function mpathBox(md, h) {                                                        // карточка героя: путь мага
+  if (!h || h.hero !== 'mage') return; const k = mpathOf(h);
+  if (!k && (h.lv || 1) < 6) { md.appendChild(el2('p', 'tip', esc(T('mpSoon')))); return; }
+  md.appendChild(el2('div', 'lbl', esc(T('mpT'))));
+  if (!k) { md.appendChild(el2('p', 'warn', esc(T('mpNeed')))); const b = btn('btn mpgo', esc(T('mpOpen')), () => mpathOpen()); b.dataset.k = 'mpOpen'; md.appendChild(b); return; }
+  md.appendChild(el2('p', 'okp', esc(T('mpNow', { p: T('mpN')[k] }) + ' · ' + T('mpS')[k])));
+  if (h.sch === 'grav') md.appendChild(el2('p', 'tip', esc(T('mpGrav')))); else mpathList(md, k);
+}
+{ const prev = HOOK.heroDemi; HOOK.heroDemi = p => { if (prev) prev(p); if (p && p.hero === 'mage' && mpathNeed(p)) setTimeout(() => { if (state === 'play' && !modal && !G.battle) mpathOpen(); }, 1800); }; }      /* маг стал великим — сразу предложить путь */
+{ const prev = HOOK.day; HOOK.day = () => { if (prev) prev(); const h = hero(); if (state === 'play' && !modal && !G.battle && h && mpathNeed(h) && SV.set && SV.set.mpNag !== G.day) { SV.set.mpNag = G.day; mpathOpen(); } }; }      /* пока путь не выбран — раз в день напомнить */
+(function () { const st = document.createElement('style'); st.textContent = '.md .mpc{display:flex;gap:8px;margin:6px 0}.md .mpc .opt{flex:1 1 0;min-width:0;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:12px 8px}.md .mpc .opt canvas{width:40px;height:40px}.md .mpc .opt.on{background:rgba(255,216,112,.16);border-color:rgba(255,216,112,.8)}.md .mpc .opt .tx b{display:block;font-size:15px}.md .mpc .opt .tx span{font-size:12px;opacity:.8}.md .mpl{display:flex;flex-direction:column;gap:6px;margin:8px 0}.md .mpr{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.05)}.md .mpr canvas{flex:0 0 30px;width:30px;height:30px}.md .mpr b{display:block;font-size:13.5px}.md .mpr span{display:block;font-size:12px;opacity:.8;line-height:1.3}.md .mpr.mpx{background:rgba(154,140,255,.12);border:1px solid rgba(154,140,255,.35)}.md .btn.mpgo{background:linear-gradient(180deg,#8a7cf0,#4a3cb0);border-color:#c8c3ff;color:#fff}'; document.head.appendChild(st); })();
+DBGX.mpathOpen = mpathOpen; DBGX.mpathPick = mpathPick; DBGX.mpathOf = mpathOf;
 
 /* ===================== Запуск ===================== */
 function finishBoot() {
