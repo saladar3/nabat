@@ -405,27 +405,67 @@ function sdkFail(){window.__sdk='failed';if(window.onSdkFailed)window.onSdkFaile
     getMode: function () { return 'pikabu'; }
   };
   var adBusy = false;
-  function showAd(kind, c) {                                                      // kind: 'fullscreen' | 'rewarded'
-    c = c || {};
-    if (adBusy) { if (c.onError) c.onError(new Error('busy')); if (c.onClose) c.onClose(false); return; }     // один показ за раз
-    var ad = pk && pk.ads && pk.ads[kind];
-    if (!ad) { if (c.onError) c.onError(new Error('no ads')); if (c.onClose) c.onClose(false); return; }
-    adBusy = true;
-    wait(ad.canShow(), 5000, 'canShow').then(function (ok) {
-      if (!ok) throw new Error('no ad');
-      if (c.onOpen) c.onOpen();
-      return wait(ad.show(), 120000, 'show');                                     // fullscreen: таймер 3 с, cooldown 120 с; rewarded: таймер 10 с
-    }).then(function (r) {
-      if (r && r.rendered) { if (kind === 'rewarded') { if (r.reward && c.onRewarded) c.onRewarded(); if (c.onClose) c.onClose(!!r.reward); } else if (c.onClose) c.onClose(true); }
-      else throw new Error((r && r.reason) || 'not rendered');
-    }).catch(function (e) { if (c.onError) c.onError(e); if (c.onClose) c.onClose(false); })      // onClose — всегда, ровно один раз
-      .then(function () { adBusy = false; });
+  function waitForResponse(p, ms) {
+    var timer;
+    return Promise.race([
+      Promise.resolve(p),
+      new Promise(function (_, reject) { timer = setTimeout(function () { reject(new Error('TIMEOUT')); }, ms); })
+    ]).finally(function () { clearTimeout(timer); });
   }
-  function wrapStore(st) {                                                        // Яндекс-структура покупок поверх sdk.store Пикабу
+  function adFailed(kind, callbacks, phase, error) {
+    console.info('[Pikabu ads]', { format: kind, phase: phase, reason: (error && error.message) || String(error) });
+    try { if (callbacks.onError) callbacks.onError(error); }
+    finally { if (callbacks.onClose) callbacks.onClose(false); }
+  }
+  async function showAd(kind, callbacks) {
+    var c = callbacks || {};
+    if (adBusy) { adFailed(kind, c, 'request', new Error('IN_PROGRESS')); return; }
+    adBusy = true;
+    var phase = 'canShow', result;
+    try {
+      var ad = pk && pk.ads && pk.ads[kind];
+      if (!pk) throw new Error('SDK_NOT_READY');
+      if (!ad || ad.isSupported === false) throw new Error('NOT_SUPPORTED');
+      if (await waitForResponse(ad.canShow(), 5000) !== true) throw new Error('CAN_SHOW_FALSE');
+      phase = 'show';
+      if (c.onOpen) c.onOpen();
+      result = await waitForResponse(ad.show(), 120000);
+      if (!result || result.rendered !== true) throw new Error((result && result.reason) || 'NOT_RENDERED');
+    } catch (error) {
+      adFailed(kind, c, phase, error);
+      return;
+    } finally {
+      adBusy = false;
+    }
+    var rewarded = kind === 'rewarded' && result.reward === true;
+    try { if (rewarded && c.onRewarded) c.onRewarded(); }
+    finally { if (c.onClose) c.onClose(kind !== 'rewarded' || rewarded); }
+  }
+  function paymentError(code) {
+    return Object.assign(new Error(code), { code: code });
+  }
+  function wrapStore(platform) {
+    var st = platform.store;
     return {
       getCatalog: function () { return wait(st.getProducts(), 10000, 'getProducts').then(function (list) { return (list || []).map(function (p) { return { id: p.id, price: p.formattedPrice || String(((p.price || 0) / 100).toFixed(2)) + ' ₽' }; }); }); },
       getPurchases: function () { return wait(st.getPurchases(), 10000, 'getPurchases').then(function (list) { return (list || []).map(function (p) { return { productID: p.productId, purchaseToken: p.purchaseId }; }); }); },
-      purchase: function (o) { return wait(st.purchase({ productId: o && o.id }), 120000, 'purchase').then(function (r) { if (!r || !r.success || !r.purchase) throw new Error((r && r.reason) || 'purchase failed'); return { productID: r.purchase.productId, purchaseToken: r.purchase.purchaseId }; }); },
+      purchase: async function (options) {
+        var id = options.id;
+        if (typeof id !== 'string' || !id) throw paymentError('INVALID_PRODUCT_ID');
+        if (platform.player && platform.player.isAuthorized === false) {
+          if (options.onStage) options.onStage('auth');
+          if (!platform.auth || typeof platform.auth.openAuthDialog !== 'function') throw paymentError('USER_UNAUTHORIZED');
+          try { await waitForResponse(platform.auth.openAuthDialog(), 90000); }
+          catch (error) { throw paymentError('USER_UNAUTHORIZED'); }
+          if (platform.player.isAuthorized !== true) throw paymentError('USER_UNAUTHORIZED');
+        }
+        if (options.onStage) options.onStage('checkout');
+        var result = await waitForResponse(st.purchase({ productId: id }), 120000);
+        if (!result || result.success !== true) throw paymentError((result && result.reason) || 'UNKNOWN');
+        var purchase = result.purchase;
+        if (!purchase || purchase.productId !== id || !purchase.purchaseId) throw paymentError('INVALID_PURCHASE_RESULT');
+        return { productID: purchase.productId, purchaseToken: purchase.purchaseId };
+      },
       consumePurchase: function (token) { return wait(st.consumePurchase(token), 10000, 'consumePurchase'); }
     };
   }
@@ -440,12 +480,17 @@ function sdkFail(){window.__sdk='failed';if(window.onSdkFailed)window.onSdkFaile
       showRewardedVideo: function (o) { showAd('rewarded', o && o.callbacks); }
     },
     getPlayer: function () { return Promise.resolve(player); },
-    getPayments: function () { return (pk && pk.store) ? Promise.resolve(wrapStore(pk.store)) : Promise.reject(new Error('no payments')); },
+    getPayments: function () {
+      return Promise.resolve(pk || initP).then(function (platform) {
+        if (!platform || !platform.store) throw paymentError('STORE_UNAVAILABLE');
+        return wrapStore(platform);
+      });
+    },
     getLeaderboards: function () { return Promise.reject(new Error('no leaderboards')); },
     isAvailableMethod: function () { return Promise.resolve(false); },
     platform: 'pikabu'
   };
-  window.YaGames = { init: function () {                                          // игра ждёт Яндекс-интерфейс; не отвечает SDK — всё равно запускаемся
+  window.YaGames = { platform: 'pikabu', init: function () {                                          // игра ждёт Яндекс-интерфейс; не отвечает SDK — всё равно запускаемся
     var PK = window.PkbSDK, p; try { p = PK && PK.init ? PK.init() : Promise.reject(new Error('no pkb sdk')); } catch (e) { p = Promise.reject(e); }
     initP = Promise.resolve(p).then(function (s) { if (s) { pk = s; if (pending != null) { var q = pending; pending = null; putNow(q); } if (readyWanted) sdk.features.LoadingAPI.ready(); } return s; });   // ответ и после срока — подхватим
     initP.catch(function () {});
@@ -3365,10 +3410,14 @@ const SCN = { isle: 1, frost: 1, ruins: 1 };                 // платные �
 const REV_WIN = 48, REV_CD = 72, MERC_N = 4, MERC_CD = 24;   // сколько часов погибшего ещё можно спасти; как часто; наёмники
 EN2.merc = { hp: 70, dmg: 8, cd: 0.14, spd: 520, r: 8 };
 const FLAGS = 6, ROOFS = 4;
-function shopInit() { G.shop = { rev: [], revT: -999, merc: [], mercT: -999, mercIdle: 0, mageD: 0, artD: 0, fnd: false, gifts: 0 }; if (!G.prem) G.prem = {}; if (!G.skin) G.skin = { flag: 0, roof: 0 }; if (G.scn == null) G.scn = ''; }
+function shopInit() { G.shop = { rev: [], revT: -999, merc: [], mercT: -999, mercIdle: 0, mageD: 0, artD: 0, fnd: false, gifts: 0, giftDay: 0 }; if (!G.prem) G.prem = {}; if (!G.skin) G.skin = { flag: 0, roof: 0 }; if (G.scn == null) G.scn = ''; }
 function shopFix() {
   if (!G.shop) shopInit(); const S = G.shop; if (!G.prem) G.prem = {}; if (!G.skin) G.skin = { flag: 0, roof: 0 }; if (G.scn == null || !SCN[G.scn]) G.scn = '';
   if (!Array.isArray(S.rev)) S.rev = []; if (!Array.isArray(S.merc)) S.merc = [];
+  if (!Number.isInteger(S.giftDay)) {
+    /* В прежних городах ищем полученный сегодня дар в летописи. */
+    S.giftDay = Array.isArray(G.log) && G.log.some(entry => entry.k === 'dayGift' && entry.d === G.day) ? G.day : 0;
+  }
   G.skin.flag = clamp(G.skin.flag | 0, 0, FLAGS - 1); G.skin.roof = clamp(G.skin.roof | 0, 0, ROOFS - 1);
 }
 function premOn(k) { return !!(G.prem && G.prem[k]); }
@@ -3443,7 +3492,10 @@ function rushCan(bid) { const b = bid ? bById(bid) : curSite(); if (!b || !b.sit
 function rush(bid) { const c = rushCan(bid); if (c !== 'ok') return c; const b = bid ? bById(bid) : curSite(); G.shop.artD = G.day; b.site.done = b.site.need; log('rush', { type: b.type }); finish(b); return 'ok'; }
 function carStayCan() { const C = G.world && G.world.car; if (!C) return 'no'; if (C.stay) return 'cd'; return 'ok'; }
 function carStay() { const c = carStayCan(); if (c !== 'ok') return c; const C = G.world.car; C.stay = true; C.till = Math.max(C.till, G.t) + 30; log('carStay', { st: C.s }); ev('assign', null); return 'ok'; }
-function dayGift() {                                         // дар дня: раз в настоящие сутки, счёт суток ведёт интерфейс
+function giftReady() { return !!(G && G.shop && G.shop.giftDay !== G.day); }
+function dayGift() {
+  if (!giftReady()) return null;
+  G.shop.giftDay = G.day;
   const c = caps(), out = {}; for (const kv of [['food', 20], ['wood', 20]]) { const v = Math.max(0, Math.min(kv[1], Math.floor(c[kv[0]] - G.res[kv[0]]))); G.res[kv[0]] += v; out[kv[0]] = v; }
   G.res.gold += 15; G.today.gold += 15; out.gold = 15; G.res.crys += 1; out.crys = 1; G.shop.gifts = (G.shop.gifts || 0) + 1; log('dayGift'); ev('assign', null); return out;
 }
@@ -3496,7 +3548,7 @@ function scnApply() {
   else if (s === 'ruins') { putB('house2', 'lot', true); putB('barn', 'lot', true); putB('well', 'lot', true); G.res.stone += 30; G.res.crys += 2;
     const l = G.land.lairs.find(q => q.kind === 'barrow'); if (l) { l.pop += 3; l.hint = true; if (G.land.a[l.area].st < 1) G.land.a[l.area].st = 1; } }
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { SCN, REV_WIN, REV_CD, MERC_N, shopInit, shopFix, premOn, shopDied, revCand, revive, mercCan, mercCall, shopStep, lootDblCan, lootDouble, mageWakeCan, mageWake, rushCan, rush, carStayCan, carStay, dayGift, crysAdd, founderApply, skinSet, stewTrade, stewTalks, stewWorld, scnApply, seasLen, SB });
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { SCN, REV_WIN, REV_CD, MERC_N, shopInit, shopFix, premOn, shopDied, revCand, revive, mercCan, mercCall, shopStep, lootDblCan, lootDouble, mageWakeCan, mageWake, rushCan, rush, carStayCan, carStay, giftReady, dayGift, crysAdd, founderApply, skinSet, stewTrade, stewTalks, stewWorld, scnApply, seasLen, SB });
 
 /* ===================== Хозяйство В1: рынок с порогами, сделка дня, заказы, свой караван, лавка диковин, слухи, займы, посевы, щиты (без DOM) ===================== */
 /* Решено с Александром 10–11.10.2026: рынок продаёт всё сверх порога, цена проседает от сброса; больше дел с золотом. Интерфейс — 3k_econ_ui.js */
@@ -11237,24 +11289,81 @@ let gpOn = false;
 let payPause = false, payT = null;      /* Kimi 038: окно оплаты платформы — как реклама: игра и звук на паузе, пока окно не вернётся */
 function syncGP() { const g = ysdk && ysdk.features && ysdk.features.GameplayAPI; if (!g) return; const B = G && G.battle, rtRun = state === 'play' && !modal && visible && !adOn && !payPause && !!B && !!B.rt && B.rt.ph === 'run' && !B.over, want = (isActive() || rtRun) && focused;      /* живой бой — тоже игра */ if (want === gpOn) return; try { if (want) g.start(); else g.stop(); gpOn = want; } catch (e) {} }
 let adOn = false, lastAd = Date.now();
-function adEnd() { adOn = false; lastAd = Date.now(); audioSync(); }
+function adEnd(shown = true) { adOn = false; if (shown) lastAd = Date.now(); audioSync(); }
 let payAt = 0;
 window.addEventListener('pointerdown', () => { if (payPause && Date.now() - payAt > 1500) payFree(); }, true);      /* игрок снова касается игры — значит, окно оплаты закрыто: не держать паузу до таймера, если площадка не вернула ответ */
 function payHold() { payPause = true; payAt = Date.now(); audioSync(); syncGP(); clearTimeout(payT); payT = setTimeout(() => { if (payPause) { payPause = false; audioSync(); syncGP(); } }, 150000); }      /* страховка: окно оплаты не вернулось — паузу снимаем сами */
 function payFree() { if (!payPause) return; payPause = false; clearTimeout(payT); audioSync(); syncGP(); }
 function showInter(done) {
   if (!ysdk || adOn || payPause || Date.now() - lastAd < 180000 || SV.runs < 2 || (SV.own && SV.own.noads)) { done(); return; }      /* окно оплаты открыто — межстраничной не показываем */
-  adOn = true; audioSync(); let opened = false, fin = false, t1, t2;
-  function end() { if (fin) return; fin = true; clearTimeout(t1); clearTimeout(t2); adEnd(); done(); }
-  t1 = setTimeout(() => { if (!opened) end(); }, 6000); t2 = setTimeout(end, 90000);
-  try { ysdk.adv.showFullscreenAdv({ callbacks: { onOpen: () => { opened = true; }, onClose: end, onError: end, onOffline: end } }); } catch (e) { end(); }
+  const pikabu = ysdk.platform === 'pikabu';
+  adOn = true; audioSync();
+  let opened = false, finished = false, openTimer, closeTimer;
+  function end(shown) {
+    if (finished) return;
+    finished = true;
+    clearTimeout(openTimer); clearTimeout(closeTimer);
+    adEnd(!pikabu || shown === true);
+    done();
+  }
+  const unavailable = () => end(false);
+  if (!pikabu) {
+    openTimer = setTimeout(() => { if (!opened) unavailable(); }, 6000);
+    closeTimer = setTimeout(unavailable, 90000);
+  }
+  try {
+    ysdk.adv.showFullscreenAdv({ callbacks: {
+      onOpen: () => { opened = true; }, onClose: end, onError: unavailable, onOffline: unavailable
+    } });
+  } catch (e) { unavailable(); }
 }
 function showRewarded(give, fail) {
-  if (adOn) return; if (!ysdk) { give(); return; }
-  adOn = true; audioSync(); let opened = false, got = false, fin = false, late = false, t1, t2;
-  function end(ok) { if (fin) return; fin = true; clearTimeout(t1); clearTimeout(t2); adEnd(); if (ok) give(); else { toast(T('noReward')); if (fail) fail(); } }
-  t1 = setTimeout(() => { if (!opened) end(true); }, 6000); t2 = setTimeout(() => end(got), 90000);
-  try { ysdk.adv.showRewardedVideo({ callbacks: { onOpen: () => { opened = true; if (fin) { late = true; adOn = true; audioSync(); syncGP(); setTimeout(() => { if (late) { late = false; adEnd(); syncGP(); } }, 90000); } }, onRewarded: () => { got = true; }, onClose: () => { if (late) { late = false; adEnd(); syncGP(); } else end(got); }, onError: () => { if (late) { late = false; adEnd(); syncGP(); } else end(true); } } }); } catch (e) { end(true); }      /* ролик, открывшийся с опозданием, всё равно ставит игру и звук на паузу */
+  if (adOn) return;
+  const pikabu = window.YaGames?.platform === 'pikabu';
+  function rejectReward(reason) {
+    toast(T(reason));
+    if (fail) fail();
+  }
+  if (!ysdk) {
+    if (pikabu) rejectReward('adUnavailable');
+    else give();
+    return;
+  }
+  adOn = true; audioSync();
+  let opened = false, rewarded = false, finished = false, lateTimer, openTimer, closeTimer;
+  function end(ok, reason = 'noReward') {
+    if (finished) return;
+    finished = true;
+    clearTimeout(openTimer); clearTimeout(closeTimer);
+    adEnd(!pikabu || ok);
+    if (ok) give();
+    else rejectReward(reason);
+  }
+  function endLate() {
+    clearTimeout(lateTimer);
+    lateTimer = null;
+    adEnd();
+    syncGP();
+  }
+  function unavailable() {
+    if (lateTimer != null) endLate();
+    else end(!pikabu, 'adUnavailable');
+  }
+  if (!pikabu) {
+    openTimer = setTimeout(() => { if (!opened) unavailable(); }, 6000);
+    closeTimer = setTimeout(() => end(rewarded), 90000);
+  }
+  try {
+    ysdk.adv.showRewardedVideo({ callbacks: {
+      onOpen: () => {
+        opened = true;
+        if (!pikabu && finished) { adOn = true; audioSync(); syncGP(); lateTimer = setTimeout(endLate, 90000); }
+      },
+      onRewarded: () => { rewarded = true; },
+      onClose: () => { if (lateTimer != null) endLate(); else end(rewarded); },
+      onError: unavailable
+    } });
+  } catch (e) { unavailable(); }
 }
 
 /* ===================== Звук ===================== */
@@ -11322,7 +11431,7 @@ const STR = {
     af: { mood: 'Довольство жителей', foodres: 'Запас еды', tavern: 'Таверна', market: 'Рынок', well: 'Колодец', hall: 'Ратуша', left: 'Люди уезжают' },
     reqT: 'Просятся в город', reqP: 'Свободных мест в домах: {n}', accept: 'Принять', decline: 'Отказать', bestAt: 'лучше всего: {s}',
     resT: { cap: 'Запас: {a} из {c}', y: 'Вчера добыто: {n}', eat: 'Вчера съедено: {n}', foodP: 'Каждый житель съедает 1 еду в день', woodP: 'Жилой дом сжигает полдерева за ночь', stoneP: 'Камень нужен для каменных домов, колодца и ратуши', goldP: 'Золото приходит с налогов и рынка' },
-    caravan: 'Позвать караван за рекламу', caravanP: '+25 еды и +25 дерева, раз в день', caravanUsed: 'Караван сегодня уже приходил', noReward: 'Награда даётся за досмотренный ролик',
+    caravan: 'Позвать караван за рекламу', caravanP: '+25 еды и +25 дерева, раз в день', caravanUsed: 'Караван сегодня уже приходил', noReward: 'Награда даётся за досмотренный ролик', adUnavailable: 'Реклама сейчас недоступна. Попробуйте позже.',
     ms: { farm: ['Постройте ферму', 'Нажмите на светящееся поле к югу от ратуши'], farmers: ['Поставьте двоих на ферму', 'Нажмите на ферму, затем «Назначить человека»'], house: ['Постройте дом', 'Без свободного жилья переселенцы не придут'], lumber: ['Лесопилка с работником', 'Опушка леса на северо-западе'],
       pop8: ['8 жителей', 'Люди приходят сами, когда сыто, есть жильё и жители довольны'], quarry: ['Постройте каменоломню', 'Скала на северо-востоке'], pop12: ['12 жителей', 'Следите за едой и жильём'], hall2: ['Ратуша II', 'Нажмите на ратушу → «Улучшить»'],
       tavern: ['Откройте таверну', 'Постройте её и назначьте трактирщика'], mood70: ['Довольство 70', 'Нажмите на жителя — увидите, чем он недоволен'], pop20: ['20 жителей', ''], craft: ['Мастерская и рынок', 'В обеих должны быть работники'], hall3: ['Ратуша III', ''], pop30: ['30 жителей', ''], pop40: ['40 жителей и довольство 70', 'Город готов к следующей главе'] },
@@ -11357,7 +11466,7 @@ const STR = {
     af: { mood: 'People’s mood', foodres: 'Food reserve', tavern: 'Tavern', market: 'Market', well: 'Well', hall: 'Town hall', left: 'People are leaving' },
     reqT: 'Asking to settle', reqP: 'Free beds in houses: {n}', accept: 'Accept', decline: 'Decline', bestAt: 'best at: {s}',
     resT: { cap: 'Stock: {a} of {c}', y: 'Produced yesterday: {n}', eat: 'Eaten yesterday: {n}', foodP: 'Each person eats 1 food a day', woodP: 'An occupied house burns half a wood a night', stoneP: 'Stone is needed for stone houses, the well and the town hall', goldP: 'Gold comes from taxes and the market' },
-    caravan: 'Call a caravan for an ad', caravanP: '+25 food and +25 wood, once a day', caravanUsed: 'The caravan has already come today', noReward: 'The reward is given for a fully watched video',
+    caravan: 'Call a caravan for an ad', caravanP: '+25 food and +25 wood, once a day', caravanUsed: 'The caravan has already come today', noReward: 'The reward is given for a fully watched video', adUnavailable: 'The ad is unavailable right now. Try again later.',
     ms: { farm: ['Build a farm', 'Tap the glowing field south of the town hall'], farmers: ['Put two people on the farm', 'Tap the farm, then “Assign a person”'], house: ['Build a house', 'Settlers do not come without a free home'], lumber: ['A lumber camp with a worker', 'The forest edge in the north-west'],
       pop8: ['8 people', 'People come on their own when the town is fed, housed and content'], quarry: ['Build a quarry', 'The rock face in the north-east'], pop12: ['12 people', 'Watch food and housing'], hall2: ['Town hall II', 'Tap the town hall → “Upgrade”'],
       tavern: ['Open a tavern', 'Build it and assign an innkeeper'], mood70: ['Mood 70', 'Tap a person to see what bothers them'], pop20: ['20 people', ''], craft: ['Workshop and market', 'Both need workers'], hall3: ['Town hall III', ''], pop30: ['30 people', ''], pop40: ['40 people and mood 70', 'The town is ready for the next chapter'] },
@@ -11444,7 +11553,15 @@ const hard = { req: 1, welcome: 1, evt: 1, scout: 1 }; let modalQuick = false;  
 function openModal(name, build, sheet) {
   const old = ui.querySelector('.ov'); if (old) old.remove(); resetInput(); modal = name; toastEl.className = '';
   const ov = el2('div', 'ov' + (sheet ? ' sheet' : '')), md = el2('div', 'md'); ov.appendChild(md); const born = modalQuick ? -1e9 : performance.now(); modalQuick = false;
-  ov.addEventListener('click', e => { if (performance.now() - born < 350) { e.stopPropagation(); e.preventDefault(); } }, true);   // второй тап двойного касания не должен ничего купить
+  let paymentPressed = null;
+  ov.addEventListener('pointerdown', e => { paymentPressed = e.target.closest('[data-payment]'); }, true);
+  ov.addEventListener('pointercancel', () => { paymentPressed = null; }, true);
+  ov.addEventListener('click', e => {
+    const payment = e.target.closest('[data-payment]');
+    const deliberatePayment = payment && (payment === paymentPressed || e.detail === 0);
+    paymentPressed = null;
+    if (!deliberatePayment && performance.now() - born < 350) { e.stopPropagation(); e.preventDefault(); }
+  }, true);   // платёж открывается только отдельным нажатием на кнопку или с клавиатуры
   ov.addEventListener('click', e => { if (e.target === ov && !hard[name] && performance.now() - born > 350) closeModal(); });
   try { build(md); } catch (e) { modal = null; hudKey = ''; hintKey = '-'; if (window.console) console.warn(e); return; }      /* окно, которое не собралось, не должно запирать игру */
   ui.appendChild(ov);
@@ -13506,6 +13623,8 @@ Object.defineProperties(DBGX, Object.getOwnPropertyDescriptors({ RIT: RIT, RIT_I
 /* ===================== Лавка: тексты, оплата, окна, предложения за рекламу, второй город ===================== */
 mergeStr(STR.ru, {
   shop: 'Лавка', shopBuy: 'Покупки', shopOwned: 'Куплено', shopGot: 'куплено', shopOff: 'Покупки сейчас недоступны', shopFail: 'Покупка не прошла', shopDemo: 'Пробный режим: покупка без оплаты', shopFree: 'проба',
+  shopAuth: 'Открываем вход в Пикабу…', shopSignIn: 'Войдите через кнопку «Войти» на Пикабу Играх и попробуйте снова.',
+  shopCheckout: 'Открываем окно оплаты…', shopWaiting: 'Ждём ответа Пикабу…', shopNoReply: 'Пикабу не ответил. Проверьте покупки перед повторной попыткой.',
   shopN: { noads: 'Без рекламы', steward: 'Мудрый управляющий', founder: 'Обоз основателя', heraldry: 'Герб и облик города', starts: 'Новые начала', crys5: '5 кристаллов', crys15: '15 кристаллов', crys40: '40 кристаллов' },
   shopD: { noads: 'Реклама между экранами больше не показывается. Ролики за награду остаются — только по желанию', steward: 'Управляющий сам торгует с караванами, принимает послов, заключает договоры и строит башню чародея', founder: 'Каждому вашему городу: 80 золота, 3 кристалла, 4 копья, припасы и мастер на все руки', heraldry: 'Шесть знамён и четыре цвета черепицы — для каждого города свои', starts: 'Остров рыбаков, долгая зима, город на руинах — выбор при основании города', crys5: 'Для обрядов чародея, двери Мёртвого города и наследия', crys15: 'Для обрядов чародея, двери Мёртвого города и наследия', crys40: 'Для обрядов чародея, двери Мёртвого города и наследия' },
   skinB: 'Знамя и черепица', skinFlag: 'Знамя над ратушей', skinRoof: 'Черепица', startsNote: 'Новые начала — в Лавке',
@@ -13513,8 +13632,8 @@ mergeStr(STR.ru, {
   ad: { revive: ['Лекарь ещё может спасти', 'Посмотрите рекламу — и {n} выживет: вернётся в город раненым.', 'Спасти за рекламу: {n}'], merc: ['Подмога', 'Посмотрите рекламу — и четверо наёмников встанут на защиту города до конца этого боя.', 'Позвать наёмников за рекламу'],
     loot: ['Двойная добыча', 'Посмотрите рекламу — и получите добычу похода ещё раз (сколько войдёт на склад).', 'Удвоить добычу за рекламу'], mage: ['Чародей без сил', 'Посмотрите рекламу — и чародей сразу будет готов к новому обряду. Раз в день.', 'Поднять чародея за рекламу'],
     rush: ['Артель', 'Посмотрите рекламу — и артель достроит это здание сразу. Раз в день.', 'Достроить за рекламу'], car: ['Караван', 'Посмотрите рекламу — и караван простоит ещё 30 часов.', 'Задержать караван за рекламу'],
-    gift: ['Дар дня', 'Посмотрите рекламу — и получите припасы, 15 золота и кристалл. Раз в сутки.', 'Дар дня за рекламу'] },
-  adUsed: { gift: 'Дар дня уже получен — приходите завтра', rush: 'Артель уже помогала сегодня', mage: 'Чародея сегодня уже поднимали' },
+    gift: ['Дар дня', 'Посмотрите рекламу — и получите припасы, 15 золота и кристалл. Раз за игровой день.', 'Дар дня за рекламу'] },
+  adUsed: { gift: 'Дар уже получен. Следующий — с новым игровым днём.', rush: 'Артель уже помогала сегодня', mage: 'Чародея сегодня уже поднимали' },
   offer: { revive: 'Спасти: {n} — за рекламу', merc: 'Наёмники — за рекламу' }, giftGot: 'Дар дня: +{f} еды, +{w} дерева, +15 золота, +1 кристалл', lootGot: 'Добыча удвоена',
   towns: 'Города', townsB: 'Другой город', townsP: 'У вас два города. Каждый живёт своей жизнью, пока вы в другом — стоит на месте.', townHere: 'Вы здесь', townGo: 'Перейти', townNew: 'Пустое место. Основать второй город', townInfo: 'День {d} · жителей: {n}', townN: 'Город {n}',
   scnT: 'Каким будет начало', scnN: { '': 'Обычное начало', isle: 'Остров рыбаков', frost: 'Долгая зима', ruins: 'Город на руинах' },
@@ -13526,6 +13645,8 @@ mergeStr(STR.ru, {
 });
 mergeStr(STR.en, {
   shop: 'Shop', shopBuy: 'Purchases', shopOwned: 'Owned', shopGot: 'purchased', shopOff: 'Purchases are unavailable right now', shopFail: 'The purchase failed', shopDemo: 'Trial mode: purchase without payment', shopFree: 'trial',
+  shopAuth: 'Opening Pikabu sign-in…', shopSignIn: 'Sign in using the Pikabu Games menu and try again.',
+  shopCheckout: 'Opening checkout…', shopWaiting: 'Waiting for Pikabu…', shopNoReply: 'Pikabu did not respond. Check your purchases before trying again.',
   shopN: { noads: 'No ads', steward: 'Wise steward', founder: 'Founder’s caravan', heraldry: 'Banner and look of the town', starts: 'New beginnings', crys5: '5 crystals', crys15: '15 crystals', crys40: '40 crystals' },
   shopD: { noads: 'Ads between screens are no longer shown. Reward videos stay — only if you want them', steward: 'The steward trades with caravans, receives envoys, signs treaties and builds the mage tower on his own', founder: 'For each of your towns: 80 gold, 3 crystals, 4 spears, supplies and a master of all trades', heraldry: 'Six banners and four roof colours — chosen for each town', starts: 'Fishers’ isle, long winter, town on ruins — chosen when founding a town', crys5: 'For the mage’s rites, the Dead City door and the legacy', crys15: 'For the mage’s rites, the Dead City door and the legacy', crys40: 'For the mage’s rites, the Dead City door and the legacy' },
   skinB: 'Banner and roofs', skinFlag: 'Banner over the town hall', skinRoof: 'Roof tiles', startsNote: 'New beginnings are in the Shop',
@@ -13533,8 +13654,8 @@ mergeStr(STR.en, {
   ad: { revive: ['The healer can still save them', 'Watch an ad — and {n} will live: they return to town wounded.', 'Save for an ad: {n}'], merc: ['Reinforcements', 'Watch an ad — and four mercenaries will defend the town until this fight is over.', 'Call mercenaries for an ad'],
     loot: ['Double loot', 'Watch an ad — and get the expedition loot once more (as much as the storage holds).', 'Double the loot for an ad'], mage: ['The mage is spent', 'Watch an ad — and the mage is ready for a new rite at once. Once a day.', 'Rouse the mage for an ad'],
     rush: ['The crew', 'Watch an ad — and the crew finishes this building at once. Once a day.', 'Finish it for an ad'], car: ['Caravan', 'Watch an ad — and the caravan stays 30 more hours.', 'Keep the caravan for an ad'],
-    gift: ['Daily gift', 'Watch an ad — and get supplies, 15 gold and a crystal. Once a day.', 'Daily gift for an ad'] },
-  adUsed: { gift: 'Today’s gift is taken — come back tomorrow', rush: 'The crew has already helped today', mage: 'The mage was already roused today' },
+    gift: ['Daily gift', 'Watch an ad — and get supplies, 15 gold and a crystal. Once per in-game day.', 'Daily gift for an ad'] },
+  adUsed: { gift: 'Gift claimed. The next gift arrives on the next in-game day.', rush: 'The crew has already helped today', mage: 'The mage was already roused today' },
   offer: { revive: 'Save {n} — for an ad', merc: 'Mercenaries — for an ad' }, giftGot: 'Daily gift: +{f} food, +{w} wood, +15 gold, +1 crystal', lootGot: 'Loot doubled',
   towns: 'Towns', townsB: 'Other town', townsP: 'You have two towns. Each lives its own life; while you are away it stands still.', townHere: 'You are here', townGo: 'Go there', townNew: 'An empty spot. Found a second town', townInfo: 'Day {d} · people: {n}', townN: 'Town {n}',
   scnT: 'Choose the beginning', scnN: { '': 'Usual beginning', isle: 'Fishers’ isle', frost: 'Long winter', ruins: 'Town on ruins' },
@@ -13588,10 +13709,37 @@ function buy(id) {
   const D = PRODS[id]; if (!D) return; if (!D.crys && owns(id)) return;
   if (window.__demo) { grant(id, null); toast(T('shopDemo')); return; }
   if (!shopOn(id)) { SND.err(); toast(T('shopOff')); return; }      /* нет платежей площадки или товара нет в её каталоге */
-  if (buying && Date.now() - buyT < 120000) return; buying = true; buyT = Date.now();
-  payHold();      /* Kimi 038: окно оплаты — пауза игры и звука; возврат колбэка снимает её, зависшее окно — таймер-страховка в payHold */
-  let p; try { p = payApi.purchase({ id: id }); } catch (e) { payFree(); buying = false; SND.err(); toast(T('shopFail')); return; }
-  Promise.resolve(p).then(x => { payFree(); buying = false; grant(id, x && x.purchaseToken); }, () => { payFree(); buying = false; SND.err(); toast(T('shopFail')); });
+  const pikabu = ysdk && ysdk.platform === 'pikabu';
+  if (buying && (pikabu || Date.now() - buyT < 120000)) return;
+  buying = true; buyT = Date.now();
+  payHold();
+  let hintTimer;
+  function finish() { clearTimeout(hintTimer); payFree(); buying = false; }
+  function stage(name) {
+    clearTimeout(hintTimer);
+    payHold();
+    toast(T(name === 'auth' ? 'shopAuth' : 'shopCheckout'));
+    hintTimer = setTimeout(() => toast(T(name === 'auth' ? 'shopSignIn' : 'shopWaiting')), 8000);
+  }
+  function failed(error) {
+    finish();
+    const reason = error && (error.code || error.message);
+    if (pikabu) {
+      console.info('[Pikabu store]', { productId: id, reason: reason || 'UNKNOWN' });
+      if (reason === 'USER_CANCELLED') { toastEl.className = ''; return; }
+      if (reason === 'TIMEOUT') payPending();
+    }
+    SND.err();
+    toast(T(pikabu && reason === 'USER_UNAUTHORIZED' ? 'shopSignIn' : pikabu && reason === 'TIMEOUT' ? 'shopNoReply' : 'shopFail'));
+  }
+  let request;
+  try { request = payApi.purchase(pikabu ? { id: id, onStage: stage } : { id: id }); }
+  catch (error) { failed(error); return; }
+  Promise.resolve(request).then(purchase => {
+    finish();
+    if (pikabu) toastEl.className = '';
+    grant(id, purchase && purchase.purchaseToken);
+  }, failed);
 }
 
 /* ---------- реклама за награду: кнопка в окне и окно согласия ---------- */
@@ -13607,9 +13755,14 @@ function adAsk(key, par, give) {
     const n = btn('btn2', esc(T('adNo')), closeModal); n.dataset.k = 'no'; md.appendChild(n);
   });
 }
-function giftKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
-function giftReady() { svFix(); return SV.giftD !== giftKey(); }
-function giftTake() { if (!giftReady() || !G) return false; SV.giftD = giftKey(); const o = dayGift(); SND.coin(); toast(T('giftGot', { f: o.food, w: o.wood })); save(); return true; }
+function giftTake() {
+  const o = dayGift();
+  if (!o) return false;
+  SND.coin();
+  toast(T('giftGot', { f: o.food, w: o.wood }));
+  save();
+  return true;
+}
 function reviveNow() { const p = revive(); if (p) { SND.dawn(); camTo(p.x, p.y - 40, 0.9); } offerKey = '-'; return p; }
 function mercNow() { const r = mercCall(); if (r === 'ok') SND.horn(); offerKey = '-'; return r; }
 function shopSite(md, b) { if (!b.site || rushCan(b.id) !== 'ok') return; adRow(md, 'rush', null, () => { rush(b.id); }, () => { if (bById(b.id)) openB(b.id); else closeModal(); }); }
@@ -13636,6 +13789,7 @@ function openShop() {
     PROD_IDS.forEach(id => {
       const P = PRODS[id], has = !P.crys && owns(id); if (!has && !shopOn(id)) return;
       const o = el2('button', 'opt' + (has ? ' own' : '')); o.dataset.k = 'buy_' + id;
+      if (!has && ysdk && ysdk.platform === 'pikabu') o.dataset.payment = '';
       o.appendChild(el2('div', 'si', svg(P.ic))); o.appendChild(el2('div', 'tx', '<b>' + esc(N[id]) + '</b><span>' + esc(D[id]) + '</span>'));
       o.appendChild(el2('div', 'pr', has ? svg('check') : esc(window.__demo ? T('shopFree') : payCat[id] || '…')));
       o.addEventListener('click', e => { e.stopPropagation(); audioInit(); SND.tap(); if (has) { if (id === 'heraldry') openSkin(); return; } buy(id); });
@@ -13710,7 +13864,7 @@ function shopHud(t) {
 }
 HOOK.merc = m => { offerKey = '-'; hudKey = ''; };
 HOOK.died = (function (prev) { return function (p) { offerKey = '-'; if (prev) prev(p); }; })(HOOK.died);
-Object.defineProperties(DBGX, Object.getOwnPropertyDescriptors({ revCand: revCand, revive: revive, mercCan: mercCan, mercCall: mercCall, lootDblCan: lootDblCan, lootDouble: lootDouble, mageWake: mageWake, mageWakeCan: mageWakeCan, rush: rush, rushCan: rushCan, carStay: carStay, carStayCan: carStayCan, dayGift: dayGift, crysAdd: crysAdd, founderApply: founderApply, skinSet: skinSet, stewTrade: stewTrade, stewTalks: stewTalks, premOn: premOn, hitP: hitP, openShop: openShop, openSkin: openSkin, openTowns: openTowns, openNewTown: openNewTown, switchTown: switchTown, openPause: openPause, openTrade: openTrade, openTripRep: openTripRep, buy: buy, grant: grant, owns: owns, shopSync: shopSync, giftReady: giftReady, giftKey: giftKey, payPending: payPending, interMaybe: interMaybe, showInter: showInter, showRewarded: showRewarded, trade: trade, PRODS: PRODS, get payOn() { return !!payApi; }, get payCat() { return payCat; }, get offerKey() { return offerKey; }, season: season, seasLen: seasLen, stewHourly: stewHourly, stewWorld: stewWorld, riskFamine: riskFamine, winterLeft: winterLeft, toWinter: toWinter, prodMul: prodMul, curSite: curSite, mkCar: mkCar, get payBusy() { return buying; }, hero: hero, endRaid: endRaid, tripHome: tripHome }));
+Object.defineProperties(DBGX, Object.getOwnPropertyDescriptors({ revCand: revCand, revive: revive, mercCan: mercCan, mercCall: mercCall, lootDblCan: lootDblCan, lootDouble: lootDouble, mageWake: mageWake, mageWakeCan: mageWakeCan, rush: rush, rushCan: rushCan, carStay: carStay, carStayCan: carStayCan, dayGift: dayGift, crysAdd: crysAdd, founderApply: founderApply, skinSet: skinSet, stewTrade: stewTrade, stewTalks: stewTalks, premOn: premOn, hitP: hitP, openShop: openShop, openSkin: openSkin, openTowns: openTowns, openNewTown: openNewTown, switchTown: switchTown, openPause: openPause, openTrade: openTrade, openTripRep: openTripRep, buy: buy, grant: grant, owns: owns, shopSync: shopSync, giftReady: giftReady, payPending: payPending, interMaybe: interMaybe, showInter: showInter, showRewarded: showRewarded, trade: trade, PRODS: PRODS, get payOn() { return !!payApi; }, get payCat() { return payCat; }, get offerKey() { return offerKey; }, season: season, seasLen: seasLen, stewHourly: stewHourly, stewWorld: stewWorld, riskFamine: riskFamine, winterLeft: winterLeft, toWinter: toWinter, prodMul: prodMul, curSite: curSite, mkCar: mkCar, get payBusy() { return buying; }, hero: hero, endRaid: endRaid, tripHome: tripHome }));
 
 /* ===================== Облики героев (Лавка): маг тяжести — Звёздный странник, Багровое затмение, Пепельная пустота =====================
    Решение Александра: облик меняет фигуру и чары (цвет дыры, камней, волн, искр), навсегда и во всех городах, силы не прибавляет.
@@ -13876,6 +14030,7 @@ function skinShow(sk, cls) {                                   // витрина
     if (own) { const b = btn(worn ? 'btn2' : 'btn', esc(worn ? T('skOff') : T('skWear')), () => { if (worn) { skOff(C); toast(T('skBack')); } else { skWear(SKS.sk); toast(fill(T('skNow'), { n: T('skN')[SKS.sk] })); } hcolKey = ''; skinShow(SKS.sk, C); }); b.dataset.k = worn ? 'skOff' : 'skWear'; md.appendChild(b); }
     else {
       const b = btn('btn skbuy' + (skSellable(id) ? '' : ' off'), svg('star') + esc(T('skBuy')) + ' · ' + esc(skPrice(id)), () => skinBuy(SKS.sk)); b.dataset.k = 'skBuy'; md.appendChild(b);
+      if (skSellable(id) && ysdk && ysdk.platform === 'pikabu') b.dataset.payment = '';
       if (!skSellable(id)) md.appendChild(el2('p', 'sknote', esc(T('skSoon'))));
       if (st === 'can') { const t2 = btn('btn2 sktry', esc(T('skTry')) + ' <small>' + esc(T('skTryP')) + '</small>', () => { if (skTryArm(SKS.sk)) { SND.coin(); toast(fill(T('skArmedC'), { c: T('skCls')[C] })); } skinShow(SKS.sk, C); }); t2.dataset.k = 'skTry'; md.appendChild(t2); }
       else md.appendChild(el2('p', 'sknote', esc(skNeedTxt(SKS.sk, st))));
